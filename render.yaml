@@ -1,0 +1,64 @@
+# Render Blueprint — deploy the whole system with one click.
+# https://render.com → New → Blueprint → pick this repo.
+#
+# After the first deploy, set the secret env vars in the Render dashboard
+# (marked sync:false below): GOOGLE_API_KEY (or ANTHROPIC_API_KEY),
+# ENCRYPTION_KEY, AUTH_SESSION_SECRET, and — for Gmail — GOOGLE_OAUTH_*.
+
+services:
+  - type: web
+    name: executive-assistant
+    runtime: node
+    plan: starter # persistent disk requires starter or higher
+    buildCommand: npm ci && npm run build
+    preDeployCommand: npm run db:push && SEED_DEMO=0 npm run db:seed
+    startCommand: npm start
+    healthCheckPath: /api/ai/status
+    autoDeploy: true
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DB_DRIVER
+        value: libsql
+      - key: LIBSQL_URL
+        value: file:/var/data/app.db
+      - key: AUTH_DRIVER
+        value: dev
+      - key: AI_DEFAULT_PROVIDER
+        value: google
+      - key: GOOGLE_MODEL
+        value: gemini-3.5-flash-lite
+      - key: APP_TIMEZONE
+        value: Asia/Jerusalem
+      - key: APP_URL
+        sync: false # set to the Render URL after first deploy (for OAuth redirect)
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: AUTH_SESSION_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+
+  # Reminder engine + automation heartbeat — runs every 5 minutes.
+  - type: cron
+    name: executive-assistant-tick
+    runtime: node
+    plan: starter
+    schedule: "*/5 * * * *"
+    buildCommand: npm ci
+    startCommand: curl -fsS -X POST "$TICK_URL/api/reminders/tick" || true
+    envVars:
+      - key: TICK_URL
+        sync: false # same as the web service APP_URL

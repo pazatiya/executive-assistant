@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: "Assistant", "Rubik", -apple-system, "Segoe UI", sans-serif;
+
+  --background: 0 0% 100%;
+  --foreground: 222 24% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 222 24% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222 24% 12%;
+  --primary: 243 75% 59%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 14% 96%;
+  --secondary-foreground: 222 24% 20%;
+  --muted: 220 14% 96%;
+  --muted-foreground: 220 9% 46%;
+  --accent: 243 75% 96%;
+  --accent-foreground: 243 55% 30%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 142 71% 40%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 92% 45%;
+  --warning-foreground: 0 0% 100%;
+  --border: 220 13% 91%;
+  --input: 220 13% 88%;
+  --ring: 243 75% 59%;
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: 224 32% 8%;
+  --foreground: 210 20% 92%;
+  --card: 224 28% 11%;
+  --card-foreground: 210 20% 92%;
+  --popover: 224 28% 11%;
+  --popover-foreground: 210 20% 92%;
+  --primary: 243 80% 67%;
+  --primary-foreground: 224 32% 8%;
+  --secondary: 223 20% 17%;
+  --secondary-foreground: 210 20% 88%;
+  --muted: 223 20% 16%;
+  --muted-foreground: 218 11% 60%;
+  --accent: 243 40% 22%;
+  --accent-foreground: 243 80% 85%;
+  --destructive: 0 63% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 142 60% 45%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 88% 55%;
+  --warning-foreground: 224 32% 8%;
+  --border: 223 18% 20%;
+  --input: 223 18% 24%;
+  --ring: 243 80% 67%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* thin scrollbars */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 999px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+.card-surface {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+}
+
+.risk-green { color: hsl(var(--success)); background: hsl(var(--success) / 0.12); }
+.risk-yellow { color: hsl(var(--warning)); background: hsl(var(--warning) / 0.14); }
+.risk-red { color: hsl(var(--destructive)); background: hsl(var(--destructive) / 0.14); }
