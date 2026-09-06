@@ -11,7 +11,7 @@
 - גישה ל-**Oracle Cloud Shell** (הדפדפן — כמו שפורסים את אפליקציית התורים)
 - ה-IP של שרת ה-Oracle: `151.145.91.37`
 - חשבון **Render** (render.com)
-- **המספר וואטסאפ של יאיר** + הטלפון שלו ליד לסריקת QR
+- **המספר וואטסאפ של יאיר: `972507983306`** + הטלפון שלו ליד לסריקת QR
 - מפתח **GOOGLE_API_KEY** (Gemini) או **ANTHROPIC_API_KEY** — כבר קיים ב-`.env.local` המקומי
 - לבחור **סיסמת גישה** לאפליקציה (משהו שקל לזכור — שניכם תשתמשו בה כדי להיכנס)
 
@@ -59,7 +59,7 @@ sudo iptables -I INPUT -p tcp --dport 3000 -j ACCEPT
 sudo netfilter-persistent save 2>/dev/null || true
 ```
 
-### 1d. קישור המספר של יאיר
+### 1d. קישור המספר של יאיר (972507983306)
 
 ```bash
 curl -s -X POST http://localhost:3000/api/sessions \
@@ -69,7 +69,7 @@ curl -s -X POST http://localhost:3000/api/sessions \
 # הבא את ה-QR כתמונה, פתח אותו, וסרוק מהטלפון של יאיר → WhatsApp → מכשירים מקושרים
 curl -s "http://localhost:3000/api/default/auth/qr?format=image" \
   -H "X-Api-Key: $WAHA_KEY" -o ~/wa-qr.png
-# הורד את wa-qr.png דרך תפריט ה-Cloud Shell (Download) וסרוק
+# הורד את wa-qr.png דרך תפריט ה-Cloud Shell (Download) וסרוק מהטלפון של יאיר
 ```
 
 בדיקה שהסתדר:
@@ -105,7 +105,7 @@ curl -s http://localhost:3000/api/sessions/default -H "X-Api-Key: $WAHA_KEY"
 | `WAHA_BASE_URL` | `http://151.145.91.37:3000` |
 | `WAHA_API_KEY` | ה-`WAHA_API_KEY` משלב 1b |
 | `WAHA_WEBHOOK_URL` | `https://<APP_URL>/api/webhooks/waha?secret=<ערך WAHA_WEBHOOK_SECRET>` |
-| `OWNER_WHATSAPP` | `yair@dalor.co.il:<מספר יאיר>,pazyairat@gmail.com:<מספר פז>` |
+| `OWNER_WHATSAPP` | `yair@dalor.co.il:972507983306,pazyairat@gmail.com:<מספר פז>` |
 
 `WAHA_WEBHOOK_SECRET`, `CRON_SECRET`, `AUTH_SESSION_SECRET`, `ENCRYPTION_KEY` — Render מייצר לבד. אחרי שהם קיימים, העתק את הערך של `WAHA_WEBHOOK_SECRET` לתוך `WAHA_WEBHOOK_URL` למעלה.
 
