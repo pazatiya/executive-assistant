@@ -1,8 +1,29 @@
 # פריסה — המזכירה של פז ויאיר
 
-שלושה חלקים: **(1) WAHA** (וואטסאפ) על שרת ה-Oracle · **(2) האפליקציה** על Render · **(3) חיווט ביניהם**.
+**הדרך המומלצת: הכול על שרת ה-Oracle, חינם, סקריפט אחד.** (למטה בהמשך: חלופת Render בתשלום.)
 
-הכול רץ 24/7. עלות: Render starter (~$7/חודש לשירות web + ~$1 לדיסק) + Oracle (חינם, always-free). ה-cron של Render חינם.
+## מהיר — Oracle, סקריפט אחד
+
+1. cloud.oracle.com → מתחברים → אייקון `>_` למעלה (Cloud Shell)
+2. מתחברים לשרת:  `ssh -i ~/.ssh/dalor_key ubuntu@151.145.91.37`
+3. מריצים:
+   ```bash
+   bash <(curl -fsSL https://raw.githubusercontent.com/pazatiya/executive-assistant/master/deploy/oracle-setup.sh)
+   ```
+   (מבקש: מפתח Google Gemini API. הכול השאר אוטומטי — 10-20 דק')
+4. בסוף מודפס QR — סורקים מהטלפון של **יאיר** (WhatsApp → מכשירים מקושרים → קשר מכשיר)
+5. בקונסולת Oracle: Networking → VCN → Security List → **Add Ingress Rule**: Source `0.0.0.0/0`, TCP, port `8080`
+6. נכנסים ל-`http://151.145.91.37:8080` עם הסיסמה שהודפסה
+
+עדכון קוד בעתיד: מריצים את אותה שורה שוב.
+QR חדש: `bash ~/executive-assistant/deploy/wa-qr.sh`
+
+---
+
+## חלופה — Render (בתשלום, ~$8/חודש, לחיצות בלבד)
+
+WAHA עדיין על ה-Oracle (שלב 1 למטה); רק האפליקציה על Render.
+עלות: Render starter (~$7 web + ~$1 disk).
 
 ---
 
