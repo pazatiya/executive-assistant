@@ -15,7 +15,9 @@ services:
     runtime: node
     plan: free
     buildCommand: npm ci && npm run build
-    preDeployCommand: npm run db:push && SEED_DEMO=0 npm run db:seed
+    # Schema + seed are applied to Turso manually from a dev machine
+    #   (npm run db:push / npm run db:seed with LIBSQL_URL + LIBSQL_AUTH_TOKEN).
+    # Free-tier services don't support preDeployCommand.
     startCommand: npm start
     healthCheckPath: /api/ai/status
     autoDeploy: true
