@@ -1,180 +1,89 @@
 # פריסה — המזכירה של פז ויאיר
 
-**הדרך המומלצת: הכול על שרת ה-Oracle, חינם, סקריפט אחד.** (למטה בהמשך: חלופת Render בתשלום.)
+**הארכיטקטורה הסופית (עלות: $7/חודש בלבד):**
 
-## מהיר — Oracle, סקריפט אחד
+| שירות | איפה | תוכנית |
+|---|---|---|
+| האפליקציה (`executive-assistant`) | Render web | **Free** (נשמרת ערה ע"י cron-job.org) |
+| בסיס נתונים | **Turso** (`dalor-mazkira`) | Free |
+| וואטסאפ (`dalor-waha`) | Render, Docker `devlikeapro/waha` | **Starter $7** + דיסק 1GB |
+| תזמון (tick כל 5 דק') | **cron-job.org** | Free |
 
-1. cloud.oracle.com → מתחברים → אייקון `>_` למעלה (Cloud Shell)
-2. מתחברים לשרת:  `ssh -i ~/.ssh/dalor_key ubuntu@151.145.91.37`
-3. מריצים:
-   ```bash
-   bash <(curl -fsSL https://raw.githubusercontent.com/pazatiya/executive-assistant/master/deploy/oracle-setup.sh)
-   ```
-   (מבקש: מפתח Google Gemini API. הכול השאר אוטומטי — 10-20 דק')
-4. בסוף מודפס QR — סורקים מהטלפון של **יאיר** (WhatsApp → מכשירים מקושרים → קשר מכשיר)
-5. בקונסולת Oracle: Networking → VCN → Security List → **Add Ingress Rule**: Source `0.0.0.0/0`, TCP, port `8080`
-6. נכנסים ל-`http://151.145.91.37:8080` עם הסיסמה שהודפסה
-
-עדכון קוד בעתיד: מריצים את אותה שורה שוב.
-QR חדש: `bash ~/executive-assistant/deploy/wa-qr.sh`
+Oracle — נזנח (חסימת הרשמה חוזרת).
 
 ---
 
-## חלופה — Render (בתשלום, ~$8/חודש, לחיצות בלבד)
+## 0. מה צריך ביד
 
-WAHA עדיין על ה-Oracle (שלב 1 למטה); רק האפליקציה על Render.
-עלות: Render starter (~$7 web + ~$1 disk).
-
----
-
-## 0. מה צריך ביד לפני שמתחילים
-
-- גישה ל-**Oracle Cloud Shell** (הדפדפן — כמו שפורסים את אפליקציית התורים)
-- ה-IP של שרת ה-Oracle: `151.145.91.37`
-- חשבון **Render** (render.com)
-- **המספר וואטסאפ של יאיר: `972507983306`** + הטלפון שלו ליד לסריקת QR
-- מפתח **GOOGLE_API_KEY** (Gemini) או **ANTHROPIC_API_KEY** — כבר קיים ב-`.env.local` המקומי
-- לבחור **סיסמת גישה** לאפליקציה (משהו שקל לזכור — שניכם תשתמשו בה כדי להיכנס)
+- חשבון **Render** (render.com) — של פז, workspace קיים
+- חשבון **Turso** — קיים, org `pazatiya`, DB `dalor-mazkira` כבר נוצר
+- **הטלפון של יאיר** (972507983306) לסריקת QR — רק בשלב האחרון
+- כל המפתחות — בקובץ הזמני של הסשן (`scratchpad/render-env.md`)
 
 ---
 
-## 1. WAHA על שרת ה-Oracle
-
-ב-**Oracle Cloud Shell**, התחבר לשרת:
-
-```bash
-ssh -i ~/.ssh/dalor_key ubuntu@151.145.91.37
-```
-
-### 1a. Docker (אם עוד אין)
-
-```bash
-docker --version || (curl -fsSL https://get.docker.com | sudo sh && sudo usermod -aG docker $USER && newgrp docker)
-```
-
-### 1b. הרצת WAHA
-
-```bash
-# מפתח API חזק — שמור אותו, צריך אותו גם ב-Render
-WAHA_KEY=$(openssl rand -hex 24); echo "WAHA_API_KEY=$WAHA_KEY"
-
-mkdir -p ~/waha-sessions
-docker run -d --name waha --restart unless-stopped \
-  -p 3000:3000 \
-  -v ~/waha-sessions:/app/.sessions \
-  -e WAHA_API_KEY="$WAHA_KEY" -e WHATSAPP_API_KEY="$WAHA_KEY" \
-  -e WAHA_DASHBOARD_ENABLED=false \
-  -e WHATSAPP_DEFAULT_ENGINE=WEBJS \
-  devlikeapro/waha
-```
-
-> **ARM?** אם `uname -m` מחזיר `aarch64`, החלף את התמונה ל-`devlikeapro/waha:arm`.
-
-### 1c. פתיחת פורט 3000
-
-בקונסולת Oracle → Networking → ה-VCN → Security List → **Add Ingress Rule**: Source `0.0.0.0/0`, TCP, port `3000`.
-וגם על השרת עצמו:
-
-```bash
-sudo iptables -I INPUT -p tcp --dport 3000 -j ACCEPT
-sudo netfilter-persistent save 2>/dev/null || true
-```
-
-### 1d. קישור המספר של יאיר (972507983306)
-
-```bash
-curl -s -X POST http://localhost:3000/api/sessions \
-  -H "X-Api-Key: $WAHA_KEY" -H "content-type: application/json" \
-  -d '{"name":"default","start":true}'
-
-# הבא את ה-QR כתמונה, פתח אותו, וסרוק מהטלפון של יאיר → WhatsApp → מכשירים מקושרים
-curl -s "http://localhost:3000/api/default/auth/qr?format=image" \
-  -H "X-Api-Key: $WAHA_KEY" -o ~/wa-qr.png
-# הורד את wa-qr.png דרך תפריט ה-Cloud Shell (Download) וסרוק מהטלפון של יאיר
-```
-
-בדיקה שהסתדר:
-
-```bash
-curl -s http://localhost:3000/api/sessions/default -H "X-Api-Key: $WAHA_KEY"
-# צריך "status":"WORKING"
-```
-
----
-
-## 2. האפליקציה על Render
-
-### 2a. דחיפה ל-GitHub
-
-הריפו כבר נדחף (פרטי): `github.com/pazatiya/executive-assistant`. עדכונים עתידיים: `git push`.
-
-### 2b. Blueprint
+## 1. Blueprint
 
 1. render.com → **New → Blueprint** → בחר את הריפו `executive-assistant`.
-2. Render קורא את `render.yaml` ומקים 2 שירותים: `executive-assistant` (web) + `executive-assistant-tick` (cron).
-3. אשר. הבנייה הראשונה תיכשל בחלקה — זה בסדר, חסרים משתני סביבה. נמלא ונריץ שוב.
+2. Render קורא את `render.yaml` ומקים 2 שירותים: `executive-assistant` (web, free) + `dalor-waha` (Docker, starter).
+3. אשר. הבנייה הראשונה תיכשל — חסרים משתני סביבה עם `sync: false`. נמלא ונריץ שוב.
 
-### 2c. משתני סביבה (Render → executive-assistant → Environment)
+## 2. משתני סביבה
+
+**`executive-assistant` → Environment:**
 
 | מפתח | ערך |
 |---|---|
-| `APP_URL` | ה-URL של Render, למשל `https://executive-assistant.onrender.com` |
-| `APP_PASSWORD` | סיסמת הגישה שבחרת |
-| `GOOGLE_API_KEY` | מפתח Gemini (מ-`.env.local`) |
-| `ANTHROPIC_API_KEY` | מפתח Claude (מ-`.env.local`) — לגיבוי |
+| `LIBSQL_URL` | `libsql://dalor-mazkira-pazatiya.aws-eu-west-1.turso.io` |
+| `LIBSQL_AUTH_TOKEN` | הטוקן מ-Turso (Create Token) |
+| `APP_URL` | כתובת ה-web service אחרי שנוצר (`https://executive-assistant-XXXX.onrender.com`) |
+| `APP_PASSWORD` | סיסמת כניסה משותפת |
+| `GOOGLE_API_KEY` | מפתח Gemini |
+| `ANTHROPIC_API_KEY` | מפתח Claude (אופציונלי, לאיכות טובה יותר) |
 | `DALOR_BARBER_ADMIN_KEY` | `2810` |
-| `WAHA_BASE_URL` | `http://151.145.91.37:3000` |
-| `WAHA_API_KEY` | ה-`WAHA_API_KEY` משלב 1b |
-| `WAHA_WEBHOOK_URL` | `https://<APP_URL>/api/webhooks/waha?secret=<ערך WAHA_WEBHOOK_SECRET>` |
-| `OWNER_WHATSAPP` | `yair@dalor.co.il:972507983306,pazyairat@gmail.com:<מספר פז>` |
+| `VAPID_PUBLIC` / `VAPID_PRIVATE` | מפתחות Web Push (`npx web-push generate-vapid-keys`) |
+| `WAHA_API_KEY` | אותו ערך כמו ב-`dalor-waha` |
+| `WAHA_WEBHOOK_SECRET` | מחרוזת אקראית חזקה |
 
-`WAHA_WEBHOOK_SECRET`, `CRON_SECRET`, `AUTH_SESSION_SECRET`, `ENCRYPTION_KEY` — Render מייצר לבד. אחרי שהם קיימים, העתק את הערך של `WAHA_WEBHOOK_SECRET` לתוך `WAHA_WEBHOOK_URL` למעלה.
+`AUTH_SESSION_SECRET`, `ENCRYPTION_KEY`, `CRON_SECRET` — Render מייצר לבד (`generateValue`).
+`WAHA_BASE_URL` — מתמלא אוטומטית מ-`dalor-waha` (רשת פרטית).
 
-### 2d. משתני ה-cron (Render → executive-assistant-tick → Environment)
+**`dalor-waha` → Environment:**
 
-| `TICK_URL` | אותו ערך כמו `APP_URL` |
-| `CRON_SECRET` | אותו ערך כמו ב-web service |
+| מפתח | ערך |
+|---|---|
+| `WAHA_API_KEY` | מחרוזת חזקה — **אותו ערך** ב-`executive-assistant` |
+| `WHATSAPP_API_KEY` | = `WAHA_API_KEY` |
 
-### 2e. Manual Deploy
+אחרי מילוי → **Manual Deploy** לשני השירותים. ה-`preDeployCommand` דוחף את הסכימה ל-Turso ומזריע.
 
-Render → executive-assistant → **Manual Deploy → Deploy latest commit**. אמור לעלות ירוק (`/api/ai/status`).
+## 3. תזמון — cron-job.org
 
----
+1. cron-job.org → הרשמה חינם → **Create cronjob**.
+2. URL: `https://<app>.onrender.com/api/scheduler/tick?secret=<CRON_SECRET>`
+   (`CRON_SECRET` — מ-Render → executive-assistant → Environment, אחרי הדפלוי הראשון)
+3. Method: **POST**. Schedule: **every 5 minutes**.
+4. זה גם שומר את ה-instance החינמי ער — אין צורך ב-UptimeRobot נפרד.
 
-## 3. חיווט WAHA → האפליקציה
+## 4. קישור וואטסאפ (יאיר)
 
-על שרת ה-Oracle, הפנה את ה-webhook של WAHA לאפליקציה:
+ב-Render → `dalor-waha` → **Shell** (או דרך ה-API עם `WAHA_API_KEY`):
 
 ```bash
-curl -s -X PUT http://localhost:3000/api/sessions/default \
-  -H "X-Api-Key: $WAHA_KEY" -H "content-type: application/json" \
-  -d '{"config":{"webhooks":[{"url":"https://<APP_URL>/api/webhooks/waha?secret=<WAHA_WEBHOOK_SECRET>","events":["message"]}]}}'
+curl -s -X POST http://localhost:3000/api/sessions \
+  -H "X-Api-Key: $WAHA_API_KEY" -H "content-type: application/json" \
+  -d '{"name":"default","start":true}'
+
+curl -s "http://localhost:3000/api/default/auth/qr?format=image" \
+  -H "X-Api-Key: $WAHA_API_KEY" -o /tmp/wa-qr.png
 ```
 
-(או פשוט להיכנס לאפליקציה → אינטגרציות → WhatsApp → "חיבור" — זה עושה את זה אוטומטית.)
+סורקים את ה-QR מהטלפון של **יאיר** → WhatsApp → מכשירים מקושרים → קשר מכשיר.
 
----
+בדיקה: `curl -s http://localhost:3000/api/sessions/default -H "X-Api-Key: $WAHA_API_KEY"` → `"status":"WORKING"`.
 
-## 4. בדיקת עשן
+אז באפליקציה → **Integrations → WhatsApp → Connect** — זה רושם את ה-webhook.
 
-1. פתח `https://<APP_URL>` → מסך התחברות → סיסמה + בחר משתמש.
-2. אינטגרציות: WhatsApp ו-"DALOR — תורים" מסומנים "מחובר".
-3. שלח הודעת בדיקה **ממספר אחר** למספר של יאיר: "מה שעות הפתיחה?" → אמורה להגיע תשובה אוטומטית, ולהופיע במסך "הודעות".
-4. שלח "יש חולצה במידה L?" → **לא** אמורה לענות; אמורה לקפוץ בקשת אישור בוואטסאפ של יאיר ופז עם קוד.
-5. ענה "אשר <קוד>" → התשובה נשלחת ללקוח.
-6. יאיר כותב לעצמו "תזכיר לי מחר ב-9 להתקשר לספק" → אמור לקבל אישור "✅ תזכורת ל-...".
+## 5. הרצה ראשונה — `draft_only`
 
----
-
-## תחזוקה
-
-- **עדכון קוד:** `git push` → Render בונה אוטומטית.
-- **WAHA התנתק:** `docker restart waha` על שרת Oracle; אם צריך QR מחדש — שלב 1d.
-- **לוגים:** Render → Logs. WAHA: `docker logs waha` על השרת.
-- **גיבוי ה-DB:** קובץ `/var/data/app.db` על הדיסק של Render (נשמר בין פריסות).
-
-## אבטחה — פתוח
-
-- `WAHA_BASE_URL` על `:3000` חשוף לאינטרנט עם מפתח API בלבד. אפשר להצר ל-IP של Render (Security List) אם רוצים.
-- `APP_PASSWORD` הוא שער יחיד משותף — לא סיסמה אישית. מספיק לזוג משתמשים על רשת מהימנה.
-- קבצי `.env` של אפליקציית התורים (`~/DALOR/yair_barber_booking`) עדיין מכילים מפתח Firebase + סיסמת Gmail בטקסט גלוי — להחליף בהזדמנות.
+המערכת עולה במצב `ASSISTANT_MODE=draft_only`: המזכירה **לא שולחת כלום** אוטומטית, רק מכינה טיוטות ב-`/messages`. אחרי שבוע של מעקב → `/settings` → החלפה ל-`active` (whitelist בלבד: שעות/כתובת/מחירון/זמינות תור).

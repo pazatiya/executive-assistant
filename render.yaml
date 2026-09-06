@@ -107,15 +107,7 @@ services:
         value: "true"
 
   # ── heartbeat ────────────────────────────────────────────────────
-  - type: cron
-    name: executive-assistant-tick
-    runtime: node
-    plan: starter
-    schedule: "*/5 * * * *"
-    buildCommand: npm ci
-    startCommand: curl -fsS -X POST "$TICK_URL/api/scheduler/tick?secret=$CRON_SECRET" || true
-    envVars:
-      - key: TICK_URL
-        sync: false # = executive-assistant APP_URL
-      - key: CRON_SECRET
-        sync: false # = executive-assistant CRON_SECRET
+  # No paid Render cron. A free external scheduler (cron-job.org) POSTs to
+  #   https://<app>.onrender.com/api/scheduler/tick?secret=<CRON_SECRET>
+  # every 5 minutes — that also keeps the free web instance warm, so no
+  # separate UptimeRobot ping is needed. See DEPLOY.md.
