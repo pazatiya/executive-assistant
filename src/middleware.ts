@@ -8,6 +8,7 @@ import { NextResponse, type NextRequest } from "next/server";
  */
 const PUBLIC_PREFIXES = [
   "/login",
+  "/api/ai/status", // Render health check — exposes only provider-availability booleans
   "/api/webhooks/",
   "/api/scheduler/tick",
   "/api/reminders/tick",
