@@ -8,6 +8,7 @@ export const env = {
   // data
   dbDriver: get("DB_DRIVER", "libsql") as "libsql" | "supabase",
   libsqlUrl: get("LIBSQL_URL", "file:./data/app.db"),
+  libsqlAuthToken: get("LIBSQL_AUTH_TOKEN"),
   databaseUrl: get("DATABASE_URL"),
   supabaseUrl: get("SUPABASE_URL"),
   supabaseAnonKey: get("SUPABASE_ANON_KEY"),

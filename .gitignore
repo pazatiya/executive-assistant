@@ -12,3 +12,6 @@ data/uploads
 .DS_Store
 .vercel
 coverage
+
+# TS incremental build cache
+tsconfig.tsbuildinfo

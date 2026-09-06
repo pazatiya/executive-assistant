@@ -16,7 +16,17 @@ declare global {
 }
 
 function createLibsqlDb() {
-  const client = createClient({ url: env.libsqlUrl });
+  // Turso (hosted libSQL) needs an auth token. Accept it either as its own
+  // env var (LIBSQL_AUTH_TOKEN) or embedded in the URL as ?authToken=…
+  let url = env.libsqlUrl;
+  let authToken = env.libsqlAuthToken || undefined;
+  const marker = "authToken=";
+  const at = url.indexOf(marker);
+  if (at !== -1) {
+    authToken = authToken ?? decodeURIComponent(url.slice(at + marker.length).split("&")[0]);
+    url = url.slice(0, at).replace(/[?&]$/, "");
+  }
+  const client = createClient(authToken ? { url, authToken } : { url });
   return drizzle(client, { schema });
 }
 

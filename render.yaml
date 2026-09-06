@@ -25,7 +25,9 @@ services:
       - key: DB_DRIVER
         value: libsql
       - key: LIBSQL_URL
-        sync: false # libsql://<db>-<org>.turso.io?authToken=<token>  (Turso free)
+        sync: false # libsql://<db>-<org>.turso.io   (Turso free, no token in URL)
+      - key: LIBSQL_AUTH_TOKEN
+        sync: false # the Turso database token (Create Token in the Turso dashboard)
       - key: AUTH_DRIVER
         value: dev
       - key: AI_DEFAULT_PROVIDER
