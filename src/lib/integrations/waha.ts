@@ -31,11 +31,17 @@ export function chatIdToNumber(chatId: string): string {
 
 type WahaResult<T> = { status: number | null; body: T | null };
 
+/** Base URL, tolerating a schemeless host:port (Render private networking). */
+function wahaBase(): string {
+  const b = env.wahaBaseUrl.trim();
+  return /^https?:\/\//.test(b) ? b : `http://${b}`;
+}
+
 async function wahaFetch<T = unknown>(
   path: string,
   opts: { method?: string; body?: unknown; timeoutMs?: number } = {},
 ): Promise<WahaResult<T>> {
-  const url = `${env.wahaBaseUrl}${path}`;
+  const url = `${wahaBase()}${path}`;
   const headers: Record<string, string> = { "X-Api-Key": env.wahaApiKey };
   let payload: string | undefined;
   if (opts.body !== undefined) {
@@ -87,14 +93,18 @@ export async function getConnectedNumber(): Promise<string | null> {
   return s?.me?.id ? chatIdToNumber(s.me.id) : null;
 }
 
-/** The URL WAHA (inside Docker) should POST events to. */
+/** The URL WAHA should POST events to. */
 export function webhookTargetUrl(): string {
   if (env.wahaWebhookUrl) return env.wahaWebhookUrl;
-  // Docker Desktop: the container reaches the host at host.docker.internal
-  const appPort = new URL(env.appUrl).port || "4310";
-  const base = `http://host.docker.internal:${appPort}`;
   const q = env.wahaWebhookSecret ? `?secret=${encodeURIComponent(env.wahaWebhookSecret)}` : "";
-  return `${base}/api/webhooks/waha${q}`;
+  const appUrl = env.appUrl;
+  // local dev with a Docker WAHA → the container reaches the host at host.docker.internal
+  if (/localhost|127\.0\.0\.1/.test(appUrl)) {
+    const port = new URL(appUrl).port || "4310";
+    return `http://host.docker.internal:${port}/api/webhooks/waha${q}`;
+  }
+  // deployed → the public app URL
+  return `${appUrl.replace(/\/$/, "")}/api/webhooks/waha${q}`;
 }
 
 /** Point the WAHA session at our webhook for inbound `message` events. */

@@ -1,35 +1,31 @@
-# Render Blueprint — deploy the app + heartbeat in one click.
-# Render → New → Blueprint → pick this repo.  Full steps: see DEPLOY.md
+# Render Blueprint — המזכירה + WAHA.
+# Render → New → Blueprint → pick this repo → Apply.
+# Then set the sync:false env vars in the dashboard (see DEPLOY.md).
 #
-# WAHA (WhatsApp) is NOT on Render — it runs on the Oracle box next to the
-# barber app (DEPLOY.md § WAHA). After the app is up, point WAHA_BASE_URL at it.
-#
-# After the first deploy set the sync:false vars in the dashboard:
-#   APP_URL, APP_PASSWORD, GOOGLE_API_KEY (or ANTHROPIC_API_KEY),
-#   WAHA_BASE_URL, WAHA_API_KEY, WAHA_WEBHOOK_URL, OWNER_WHATSAPP,
-#   DALOR_BARBER_ADMIN_KEY, and TICK_URL / CRON_SECRET on the cron service.
+#  - executive-assistant   web, FREE instance (kept warm by UptimeRobot).
+#                          DB is external (Turso) so it survives spin-down.
+#  - dalor-waha            WAHA (WhatsApp), Starter ($7) + 1GB disk for the
+#                          linked session. Must never sleep.
+#  - executive-assistant-tick   cron, every 5 min → scheduler/reminders.
 
 services:
+  # ── the assistant (app) — free ────────────────────────────────────
   - type: web
     name: executive-assistant
     runtime: node
-    plan: starter # persistent disk requires starter or higher
+    plan: free
     buildCommand: npm ci && npm run build
     preDeployCommand: npm run db:push && SEED_DEMO=0 npm run db:seed
     startCommand: npm start
     healthCheckPath: /api/ai/status
     autoDeploy: true
-    disk:
-      name: data
-      mountPath: /var/data
-      sizeGB: 1
     envVars:
       - key: NODE_VERSION
         value: "22"
       - key: DB_DRIVER
         value: libsql
       - key: LIBSQL_URL
-        value: file:/var/data/app.db
+        sync: false # libsql://<db>-<org>.turso.io?authToken=<token>  (Turso free)
       - key: AUTH_DRIVER
         value: dev
       - key: AI_DEFAULT_PROVIDER
@@ -38,6 +34,8 @@ services:
         value: gemini-3.5-flash-lite
       - key: APP_TIMEZONE
         value: Asia/Jerusalem
+      - key: ASSISTANT_MODE
+        value: draft_only
       - key: WHATSAPP_OWNER_EMAIL
         value: yair@dalor.co.il
       - key: WHATSAPP_WORKSPACE_SLUG
@@ -46,16 +44,18 @@ services:
         value: https://dalorbook.duckdns.org
       - key: WA_COUNTRY_CODE
         value: "972"
-      # ── secrets / per-deploy ──────────────────────────────────
+      - key: WAHA_SESSION
+        value: default
+      # ── secrets / per-deploy ────────────────────────────────────
       - key: APP_URL
-        sync: false # the Render URL, e.g. https://executive-assistant.onrender.com
+        sync: false # https://executive-assistant.onrender.com
       - key: APP_PASSWORD
-        sync: false # shared login password (pick something memorable)
+        sync: false
       - key: GOOGLE_API_KEY
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
-      - key: OPENAI_API_KEY
+      - key: DALOR_BARBER_ADMIN_KEY
         sync: false
       - key: AUTH_SESSION_SECRET
         generateValue: true
@@ -63,23 +63,48 @@ services:
         generateValue: true
       - key: CRON_SECRET
         generateValue: true
-      - key: DALOR_BARBER_ADMIN_KEY
+      - key: VAPID_PUBLIC
         sync: false
-      # ── WhatsApp / WAHA (host is the Oracle box) ───────────────
-      - key: WAHA_BASE_URL
-        sync: false # http://<oracle-ip>:3000
+      - key: VAPID_PRIVATE
+        sync: false
+      - key: VAPID_SUBJECT
+        value: mailto:dalor@dalor.co.il
       - key: WAHA_API_KEY
-        sync: false # same key WAHA runs with
-      - key: WAHA_SESSION
-        value: default
+        sync: false # same value as dalor-waha's WAHA_API_KEY
       - key: WAHA_WEBHOOK_SECRET
-        generateValue: true
-      - key: WAHA_WEBHOOK_URL
-        sync: false # https://<app>/api/webhooks/waha?secret=<WAHA_WEBHOOK_SECRET value>
-      - key: OWNER_WHATSAPP
-        sync: false # "yair@dalor.co.il:9725...,pazyairat@gmail.com:9725..."
+        sync: false # any strong string; the assistant embeds it in the webhook URL
+      - key: WAHA_BASE_URL
+        fromService:
+          type: web
+          name: dalor-waha
+          property: hostport
+        # → "dalor-waha:PORT" on the private network; the code prefixes http://
 
-  # Reminder engine + brief scheduler — every 5 minutes.
+  # ── WAHA (WhatsApp) — paid, always on ─────────────────────────────
+  - type: web
+    name: dalor-waha
+    runtime: image
+    plan: starter
+    image:
+      url: docker.io/devlikeapro/waha:latest
+    autoDeploy: false
+    disk:
+      name: waha-sessions
+      mountPath: /app/.sessions
+      sizeGB: 1
+    envVars:
+      - key: WAHA_API_KEY
+        sync: false # generate a strong key; put the SAME value on executive-assistant
+      - key: WHATSAPP_API_KEY
+        sync: false # = WAHA_API_KEY (WAHA reads either)
+      - key: WHATSAPP_DEFAULT_ENGINE
+        value: NOWEB
+      - key: WAHA_DASHBOARD_ENABLED
+        value: "false"
+      - key: WHATSAPP_RESTART_ALL_SESSIONS
+        value: "true"
+
+  # ── heartbeat ────────────────────────────────────────────────────
   - type: cron
     name: executive-assistant-tick
     runtime: node
@@ -89,6 +114,6 @@ services:
     startCommand: curl -fsS -X POST "$TICK_URL/api/scheduler/tick?secret=$CRON_SECRET" || true
     envVars:
       - key: TICK_URL
-        sync: false # same as the web service APP_URL
+        sync: false # = executive-assistant APP_URL
       - key: CRON_SECRET
-        sync: false # same value as the web service CRON_SECRET
+        sync: false # = executive-assistant CRON_SECRET
