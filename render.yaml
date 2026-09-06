@@ -1,9 +1,13 @@
-# Render Blueprint — deploy the whole system with one click.
-# https://render.com → New → Blueprint → pick this repo.
+# Render Blueprint — deploy the app + heartbeat in one click.
+# Render → New → Blueprint → pick this repo.  Full steps: see DEPLOY.md
 #
-# After the first deploy, set the secret env vars in the Render dashboard
-# (marked sync:false below): GOOGLE_API_KEY (or ANTHROPIC_API_KEY),
-# ENCRYPTION_KEY, AUTH_SESSION_SECRET, and — for Gmail — GOOGLE_OAUTH_*.
+# WAHA (WhatsApp) is NOT on Render — it runs on the Oracle box next to the
+# barber app (DEPLOY.md § WAHA). After the app is up, point WAHA_BASE_URL at it.
+#
+# After the first deploy set the sync:false vars in the dashboard:
+#   APP_URL, APP_PASSWORD, GOOGLE_API_KEY (or ANTHROPIC_API_KEY),
+#   WAHA_BASE_URL, WAHA_API_KEY, WAHA_WEBHOOK_URL, OWNER_WHATSAPP,
+#   DALOR_BARBER_ADMIN_KEY, and TICK_URL / CRON_SECRET on the cron service.
 
 services:
   - type: web
@@ -34,8 +38,19 @@ services:
         value: gemini-3.5-flash-lite
       - key: APP_TIMEZONE
         value: Asia/Jerusalem
+      - key: WHATSAPP_OWNER_EMAIL
+        value: yair@dalor.co.il
+      - key: WHATSAPP_WORKSPACE_SLUG
+        value: dalor
+      - key: DALOR_BARBER_URL
+        value: https://dalorbook.duckdns.org
+      - key: WA_COUNTRY_CODE
+        value: "972"
+      # ── secrets / per-deploy ──────────────────────────────────
       - key: APP_URL
-        sync: false # set to the Render URL after first deploy (for OAuth redirect)
+        sync: false # the Render URL, e.g. https://executive-assistant.onrender.com
+      - key: APP_PASSWORD
+        sync: false # shared login password (pick something memorable)
       - key: GOOGLE_API_KEY
         sync: false
       - key: ANTHROPIC_API_KEY
@@ -46,19 +61,34 @@ services:
         generateValue: true
       - key: ENCRYPTION_KEY
         generateValue: true
-      - key: GOOGLE_OAUTH_CLIENT_ID
+      - key: CRON_SECRET
+        generateValue: true
+      - key: DALOR_BARBER_ADMIN_KEY
         sync: false
-      - key: GOOGLE_OAUTH_CLIENT_SECRET
-        sync: false
+      # ── WhatsApp / WAHA (host is the Oracle box) ───────────────
+      - key: WAHA_BASE_URL
+        sync: false # http://<oracle-ip>:3000
+      - key: WAHA_API_KEY
+        sync: false # same key WAHA runs with
+      - key: WAHA_SESSION
+        value: default
+      - key: WAHA_WEBHOOK_SECRET
+        generateValue: true
+      - key: WAHA_WEBHOOK_URL
+        sync: false # https://<app>/api/webhooks/waha?secret=<WAHA_WEBHOOK_SECRET value>
+      - key: OWNER_WHATSAPP
+        sync: false # "yair@dalor.co.il:9725...,pazyairat@gmail.com:9725..."
 
-  # Reminder engine + automation heartbeat — runs every 5 minutes.
+  # Reminder engine + brief scheduler — every 5 minutes.
   - type: cron
     name: executive-assistant-tick
     runtime: node
     plan: starter
     schedule: "*/5 * * * *"
     buildCommand: npm ci
-    startCommand: curl -fsS -X POST "$TICK_URL/api/reminders/tick" || true
+    startCommand: curl -fsS -X POST "$TICK_URL/api/scheduler/tick?secret=$CRON_SECRET" || true
     envVars:
       - key: TICK_URL
         sync: false # same as the web service APP_URL
+      - key: CRON_SECRET
+        sync: false # same value as the web service CRON_SECRET

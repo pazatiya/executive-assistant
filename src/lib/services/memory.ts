@@ -1,8 +1,9 @@
-import { and, desc, eq, or, isNull, inArray } from "drizzle-orm";
+import { and, desc, eq, or, isNull, inArray, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { memories } from "@/lib/db/schema";
 import { id } from "@/lib/ids";
 import { nowIso } from "@/lib/utils";
+import { canAccessRow, myWorkspaceIds } from "@/lib/auth/scope";
 import { logActivity } from "./activity";
 
 export type Memory = typeof memories.$inferSelect;
@@ -54,7 +55,14 @@ export async function listMemories(
   userId: string,
   opts: { workspaceId?: string; types?: Memory["type"][] } = {},
 ) {
-  const conds = [eq(memories.userId, userId)];
+  // Visible memories = mine + global (null workspace) + anything in a workspace I belong to.
+  const wsIds = await myWorkspaceIds(userId);
+  const visible = or(
+    eq(memories.userId, userId),
+    isNull(memories.workspaceId),
+    wsIds.length ? inArray(memories.workspaceId, wsIds) : undefined,
+  )!;
+  const conds: SQL[] = [visible];
   if (opts.types?.length) conds.push(inArray(memories.type, opts.types));
   if (opts.workspaceId)
     conds.push(or(isNull(memories.workspaceId), eq(memories.workspaceId, opts.workspaceId))!);
@@ -66,7 +74,10 @@ export async function listMemories(
 }
 
 export async function deleteMemory(userId: string, memId: string) {
-  await db.delete(memories).where(and(eq(memories.id, memId), eq(memories.userId, userId)));
+  const row = await db.query.memories.findFirst({ where: eq(memories.id, memId) });
+  if (row && (await canAccessRow(userId, row))) {
+    await db.delete(memories).where(eq(memories.id, memId));
+  }
 }
 
 /** Compact context block injected into the orchestrator's system prompt. */

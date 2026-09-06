@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import { Mail, Instagram, Plug, AlertTriangle } from "lucide-react";
 import { PageHeader, PageBody } from "@/components/layout/page-header";
 import { Card } from "@/components/ui/card";
@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { loadAppContext } from "@/lib/app-context";
 import { db } from "@/lib/db";
 import { emails, messages } from "@/lib/db/schema";
+import { listScope } from "@/lib/auth/scope";
 import { listIntegrations } from "@/lib/integrations/registry";
 import { timeAgo } from "@/lib/utils";
 
@@ -30,9 +31,13 @@ const CAT_LABEL: Record<string, string> = {
 
 export default async function MessagesPage() {
   const { user } = await loadAppContext();
+  const [emailScope, msgScope] = await Promise.all([
+    listScope({ userId: emails.userId, workspaceId: emails.workspaceId }, user.id),
+    listScope({ userId: messages.userId, workspaceId: messages.workspaceId }, user.id),
+  ]);
   const [em, sm, integrations] = await Promise.all([
-    db.select().from(emails).where(eq(emails.userId, user.id)).orderBy(desc(emails.receivedAt)),
-    db.select().from(messages).where(eq(messages.userId, user.id)).orderBy(desc(messages.receivedAt)),
+    db.select().from(emails).where(emailScope).orderBy(desc(emails.receivedAt)),
+    db.select().from(messages).where(msgScope).orderBy(desc(messages.receivedAt)),
     listIntegrations(user.id),
   ]);
   const connected = new Set(integrations.filter((i) => i.status === "connected").map((i) => i.provider));

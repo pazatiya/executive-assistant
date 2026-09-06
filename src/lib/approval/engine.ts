@@ -1,6 +1,7 @@
 import { and, eq, or, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { memories, senderRules } from "@/lib/db/schema";
+import { myWorkspaceIds } from "@/lib/auth/scope";
 
 export type RiskLevel = "green" | "yellow" | "red";
 
@@ -18,6 +19,9 @@ export const ACTION_CATALOG = {
   create_reminder: "green", // when explicitly requested by the user
   detect_spam: "green",
   propose_plan: "green",
+  auto_reply_routine: "green", // a canned answer to a whitelisted routine question
+
+  check_availability: "green", // read barber calendar
 
   // ── YELLOW: outward actions, gated by user-configured permission ──
   send_email: "yellow",
@@ -28,6 +32,7 @@ export const ACTION_CATALOG = {
   contact_client: "yellow",
   follow_up: "yellow",
   update_crm: "yellow",
+  book_appointment: "yellow",
   archive_email: "yellow",
   delete_email: "yellow",
   browser_action: "yellow",
@@ -62,7 +67,18 @@ export interface ClassifyInput {
   agentAutonomy?: "suggest_only" | "act_on_green" | "act_on_yellow";
   /** negative sentiment / complaint always forces approval regardless of type */
   negativeSentiment?: boolean;
+  /** triage intent bucket — routine buckets on the closed allowlist may auto-reply */
+  intentCategory?: string;
 }
+
+/** Customer-message intents the assistant may answer on its own — closed list. */
+export const AUTO_REPLY_INTENTS = new Set([
+  "opening_hours",
+  "location",
+  "barber_pricelist",
+  "appointment_availability",
+  "appointment_confirm",
+]);
 
 export interface ClassifyResult {
   riskLevel: RiskLevel;
@@ -103,12 +119,17 @@ export async function classifyAction(input: ClassifyInput): Promise<ClassifyResu
       ? "פעולת GREEN — קריאה / ניתוח / הכנת טיוטה. ניתנת לביצוע אוטומטי."
       : "פעולת YELLOW — פעולה כלפי חוץ. דורשת אישור אלא אם הגדרת אחרת.";
 
-  // 2. permanent memory rules
+  // 2. permanent memory rules — mine, global, or set by anyone in a workspace I share
+  const wsIds = await myWorkspaceIds(input.userId);
   const rules = await db.query.memories.findMany({
     where: and(
-      eq(memories.userId, input.userId),
       eq(memories.type, "permanent"),
-      or(isNull(memories.workspaceId), eq(memories.workspaceId, input.workspaceId ?? "")),
+      or(
+        isNull(memories.workspaceId),
+        eq(memories.userId, input.userId),
+        input.workspaceId ? eq(memories.workspaceId, input.workspaceId) : undefined,
+        wsIds.length ? or(...wsIds.map((w) => eq(memories.workspaceId, w))) : undefined,
+      ),
     ),
   });
   for (const r of rules) {

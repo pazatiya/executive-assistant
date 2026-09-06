@@ -1,7 +1,8 @@
-import { desc, eq, and } from "drizzle-orm";
+import { desc } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { activityLogs } from "@/lib/db/schema";
 import { id } from "@/lib/ids";
+import { listScope } from "@/lib/auth/scope";
 
 export interface LogInput {
   userId: string;
@@ -41,8 +42,10 @@ export async function logActivity(input: LogInput) {
 }
 
 export async function listActivity(userId: string, opts: { workspaceId?: string; limit?: number } = {}) {
-  const where = opts.workspaceId
-    ? and(eq(activityLogs.userId, userId), eq(activityLogs.workspaceId, opts.workspaceId))
-    : eq(activityLogs.userId, userId);
+  const where = await listScope(
+    { userId: activityLogs.userId, workspaceId: activityLogs.workspaceId },
+    userId,
+    opts.workspaceId,
+  );
   return db.select().from(activityLogs).where(where).orderBy(desc(activityLogs.createdAt)).limit(opts.limit ?? 100);
 }

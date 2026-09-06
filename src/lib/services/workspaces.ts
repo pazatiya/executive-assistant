@@ -3,21 +3,24 @@ import { db } from "@/lib/db";
 import { workspaceMembers, workspaces } from "@/lib/db/schema";
 import { id } from "@/lib/ids";
 import { nowIso } from "@/lib/utils";
+import { isMember } from "@/lib/auth/scope";
 
 export type Workspace = typeof workspaces.$inferSelect;
 
+/** Workspaces this user is a member of (owned or shared), oldest first. */
 export async function listWorkspaces(userId: string) {
-  return db
+  const rows = await db
     .select()
     .from(workspaces)
-    .where(and(eq(workspaces.ownerId, userId), eq(workspaces.isArchived, false)))
+    .innerJoin(workspaceMembers, eq(workspaceMembers.workspaceId, workspaces.id))
+    .where(and(eq(workspaceMembers.userId, userId), eq(workspaces.isArchived, false)))
     .orderBy(asc(workspaces.createdAt));
+  return rows.map((r) => r.workspaces);
 }
 
 export async function getWorkspace(userId: string, workspaceId: string) {
-  return db.query.workspaces.findFirst({
-    where: and(eq(workspaces.id, workspaceId), eq(workspaces.ownerId, userId)),
-  });
+  if (!(await isMember(userId, workspaceId))) return undefined;
+  return db.query.workspaces.findFirst({ where: eq(workspaces.id, workspaceId) });
 }
 
 export interface CreateWorkspaceInput {

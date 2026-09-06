@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { emails, messages, tasks } from "@/lib/db/schema";
 import { nowIso } from "@/lib/utils";
 import { getConnector } from "@/lib/integrations/registry";
+import { createBooking } from "@/lib/integrations/dalor-barber";
+import { WahaConnector, normalizeChatId } from "@/lib/integrations/waha";
 
 export interface ExecuteInput {
   userId: string;
@@ -63,16 +65,37 @@ export async function executeAction(input: ExecuteInput): Promise<ExecuteResult>
       }
 
       case "reply_message": {
-        const messageId = payload.messageId as string;
-        await db
-          .update(messages)
-          .set({ status: "replied", draftReply: (payload.text as string) ?? null, updatedAt: nowIso() })
-          .where(eq(messages.id, messageId));
+        const messageId = payload.messageId as string | undefined;
+        const text = (payload.text as string) ?? (payload.body as string) ?? "";
+        const msg = messageId
+          ? await db.query.messages.findFirst({ where: eq(messages.id, messageId) })
+          : null;
+        const channel = (msg?.channel ?? (payload.channel as string)) as string | undefined;
+        const to = (payload.to as string) ?? msg?.authorHandle;
+
+        let sent: { simulated: boolean; providerId?: string } = { simulated: true };
+        if (channel === "whatsapp" && to) {
+          const connector = await getConnector(input.userId, "whatsapp", null);
+          if (connector?.status === "connected") {
+            const r = await connector.executeAction("send_message", { to, text });
+            if (!r.ok) return { ok: false, actionType, detail: "", error: r.error ?? "WhatsApp send failed" };
+            sent = { simulated: false, providerId: (r.data?.chatId as string) ?? undefined };
+          }
+        }
+
+        if (messageId) {
+          await db
+            .update(messages)
+            .set({ status: "replied", draftReply: text, updatedAt: nowIso() })
+            .where(eq(messages.id, messageId));
+        }
         return {
           ok: true,
           actionType,
-          detail: "התגובה נשמרה ותפורסם כשהערוץ יחובר (סימולציה).",
-          data: { simulated: true },
+          detail: sent.simulated
+            ? "התגובה נשמרה ותישלח כשהערוץ יחובר (סימולציה)."
+            : "התגובה נשלחה בוואטסאפ.",
+          data: { ...sent },
         };
       }
 
@@ -99,6 +122,36 @@ export async function executeAction(input: ExecuteInput): Promise<ExecuteResult>
           detail: "האירוע נרשם מקומית. סנכרון ל-Google Calendar יופעל בחיבור.",
           data: { simulated: true, event: payload },
         };
+      }
+
+      case "book_appointment": {
+        const date = String(payload.date ?? "");
+        const time = String(payload.time ?? "");
+        const r = await createBooking({
+          fullName: String(payload.fullName ?? "לקוח"),
+          phone: String(payload.phone ?? ""),
+          date,
+          time,
+          notes: payload.notes ? String(payload.notes) : undefined,
+        });
+        if (!r.ok) return { ok: false, actionType, detail: "", error: r.error ?? "קביעת התור נכשלה" };
+
+        // tell the customer it's confirmed
+        const replyTo = String(payload.replyTo ?? payload.phone ?? "");
+        if (replyTo) {
+          try {
+            await new WahaConnector().executeAction("send_message", {
+              to: normalizeChatId(replyTo),
+              text: `נקבע לך תור ל-${date} בשעה ${time} ✂️ נתראה! אם צריך לשנות — פשוט תכתוב לי כאן.`,
+            });
+          } catch {
+            /* best effort */
+          }
+        }
+        const messageId = payload.messageId as string | undefined;
+        if (messageId)
+          await db.update(messages).set({ status: "replied", updatedAt: nowIso() }).where(eq(messages.id, messageId));
+        return { ok: true, actionType, detail: `תור נקבע — ${date} ${time}`, data: r.data ?? {} };
       }
 
       case "update_crm": {

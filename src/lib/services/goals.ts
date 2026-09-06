@@ -1,8 +1,9 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { goals } from "@/lib/db/schema";
 import { id } from "@/lib/ids";
 import { clamp, nowIso } from "@/lib/utils";
+import { canAccessRow, listScope } from "@/lib/auth/scope";
 import { logActivity } from "./activity";
 
 export type Goal = typeof goals.$inferSelect;
@@ -49,13 +50,15 @@ export async function createGoal(input: CreateGoalInput): Promise<Goal> {
 }
 
 export async function listGoals(userId: string, opts: { workspaceId?: string } = {}) {
-  const conds = [eq(goals.userId, userId)];
-  if (opts.workspaceId) conds.push(eq(goals.workspaceId, opts.workspaceId));
+  const conds: SQL[] = [
+    await listScope({ userId: goals.userId, workspaceId: goals.workspaceId }, userId, opts.workspaceId),
+  ];
   return db.select().from(goals).where(and(...conds)).orderBy(desc(goals.updatedAt));
 }
 
 export async function getGoal(userId: string, goalId: string) {
-  return db.query.goals.findFirst({ where: and(eq(goals.id, goalId), eq(goals.userId, userId)) });
+  const row = await db.query.goals.findFirst({ where: eq(goals.id, goalId) });
+  return row && (await canAccessRow(userId, row)) ? row : undefined;
 }
 
 export async function updateGoal(userId: string, goalId: string, patch: Partial<Goal>) {

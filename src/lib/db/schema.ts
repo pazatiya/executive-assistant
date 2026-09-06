@@ -423,6 +423,8 @@ export const approvals = sqliteTable(
     reason: text("reason").notNull().default(""), // why approval is required
     preview: text("preview").notNull().default(""), // human-readable preview / draft content
     proposedBy: text("proposed_by").notNull().default("orchestrator"), // agent key
+    // short human code for approving from WhatsApp ("אשר A7"); unique among pending
+    shortCode: text("short_code"),
     status: text("status").$type<"pending" | "approved" | "edited_approved" | "rejected" | "expired" | "executed" | "failed">().notNull().default("pending"),
     decidedBy: text("decided_by"),
     decidedAt: text("decided_at"),

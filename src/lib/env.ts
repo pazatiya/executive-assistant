@@ -16,6 +16,8 @@ export const env = {
   // auth
   authDriver: get("AUTH_DRIVER", "dev") as "dev" | "supabase",
   authSessionSecret: get("AUTH_SESSION_SECRET", "dev-insecure-secret-change-me-please!!"),
+  // shared access password — when set, /login requires it and the app is gated
+  appPassword: get("APP_PASSWORD"),
 
   // ai
   anthropicApiKey: get("ANTHROPIC_API_KEY"),
@@ -31,6 +33,27 @@ export const env = {
   googleOauthClientId: get("GOOGLE_OAUTH_CLIENT_ID"),
   googleOauthClientSecret: get("GOOGLE_OAUTH_CLIENT_SECRET"),
   encryptionKey: get("ENCRYPTION_KEY", get("AUTH_SESSION_SECRET", "dev-insecure-secret-change-me-please!!")),
+
+  // WhatsApp — self-hosted WAHA (see ~/.claude/skills/whatsapp-self)
+  wahaBaseUrl: get("WAHA_BASE_URL", "http://localhost:3000"),
+  wahaApiKey: get("WAHA_API_KEY"),
+  wahaSession: get("WAHA_SESSION", "default"),
+  wahaWebhookSecret: get("WAHA_WEBHOOK_SECRET"),
+  // URL WAHA (in Docker) uses to reach this app; host.docker.internal on Docker Desktop
+  wahaWebhookUrl: get("WAHA_WEBHOOK_URL"),
+  waCountryCode: get("WA_COUNTRY_CODE", "972"),
+  // customer messages land on יאיר's line; resolve owner + business workspace
+  whatsappOwnerEmail: get("WHATSAPP_OWNER_EMAIL", "yair@dalor.co.il"),
+  whatsappWorkspaceSlug: get("WHATSAPP_WORKSPACE_SLUG", "dalor"),
+  // owners' phone numbers for the command channel (briefs, approvals) — comma-separated
+  ownerWhatsapp: get("OWNER_WHATSAPP"),
+
+  // DALOR barber booking app (dalorbook.duckdns.org)
+  dalorBarberUrl: get("DALOR_BARBER_URL", "https://dalorbook.duckdns.org"),
+  dalorBarberAdminKey: get("DALOR_BARBER_ADMIN_KEY"),
+
+  // scheduler / cron auth (Stage 4)
+  cronSecret: get("CRON_SECRET"),
 
   // app
   appUrl: get("APP_URL", "http://localhost:4310"),

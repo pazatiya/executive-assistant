@@ -95,7 +95,7 @@ export const PROVIDER_CATALOG: ProviderSpec[] = [
     category: "messaging",
     phase: 4,
     authKind: "api_key",
-    setupHint: "WhatsApp Cloud API (Meta) או ספק צד ג׳",
+    setupHint: "WAHA מקומי (self-hosted). קשרו פעם אחת: python3 ~/.claude/skills/whatsapp-self/wa.py ensure-up && … connect",
     capabilities: [cap("read_messages", "קריאת הודעות", "green"), cap("send_message", "שליחת הודעה", "yellow")],
   },
   {
@@ -232,6 +232,19 @@ export const PROVIDER_CATALOG: ProviderSpec[] = [
     authKind: "api_key",
     setupHint: "Base URL + auth header; הגדרת endpoints ב-config",
     capabilities: [cap("request", "קריאת API", "yellow")],
+  },
+  {
+    provider: "dalor_barber",
+    displayName: "DALOR — תורים",
+    category: "custom",
+    phase: 4,
+    authKind: "api_key",
+    setupHint: "אפליקציית התורים dalorbook.duckdns.org — DALOR_BARBER_ADMIN_KEY ב-.env",
+    capabilities: [
+      cap("check_availability", "בדיקת זמינות תור", "green"),
+      cap("list_appointments", "רשימת תורים", "green"),
+      cap("book_appointment", "קביעת תור", "yellow"),
+    ],
   },
 ];
 

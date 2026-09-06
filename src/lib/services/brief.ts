@@ -2,6 +2,7 @@ import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { activityLogs, approvals, emails, messages, reminders, tasks } from "@/lib/db/schema";
 import { nowIso } from "@/lib/utils";
+import { listScope } from "@/lib/auth/scope";
 
 export interface MorningBrief {
   generatedAt: string;
@@ -26,23 +27,28 @@ export interface EndOfDayBrief {
 }
 
 export async function buildMorningBrief(userId: string, workspaceId?: string): Promise<MorningBrief> {
-  const wsFilter = workspaceId ? [eq(tasks.workspaceId, workspaceId)] : [];
+  const [taskScope, reminderScope, apprScope, emailScope, msgScope] = await Promise.all([
+    listScope({ userId: tasks.userId, workspaceId: tasks.workspaceId }, userId, workspaceId),
+    listScope({ userId: reminders.userId, workspaceId: reminders.workspaceId }, userId, workspaceId),
+    listScope({ userId: approvals.userId, workspaceId: approvals.workspaceId }, userId, workspaceId),
+    listScope({ userId: emails.userId, workspaceId: emails.workspaceId }, userId, workspaceId),
+    listScope({ userId: messages.userId, workspaceId: messages.workspaceId }, userId, workspaceId),
+  ]);
   const today = new Date();
   const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).toISOString();
 
   const dueReminders = await db
     .select()
     .from(reminders)
-    .where(and(eq(reminders.userId, userId), eq(reminders.status, "scheduled"), lte(reminders.dueAt, endOfDay)));
+    .where(and(reminderScope, eq(reminders.status, "scheduled"), lte(reminders.dueAt, endOfDay)));
 
   const openTasks = await db
     .select()
     .from(tasks)
     .where(
       and(
-        eq(tasks.userId, userId),
+        taskScope,
         inArray(tasks.status, ["inbox", "planned", "in_progress", "waiting", "waiting_approval"]),
-        ...wsFilter,
       ),
     )
     .orderBy(desc(tasks.priority))
@@ -53,28 +59,22 @@ export async function buildMorningBrief(userId: string, workspaceId?: string): P
   const pendingApprovals = await db
     .select()
     .from(approvals)
-    .where(and(eq(approvals.userId, userId), eq(approvals.status, "pending")));
+    .where(and(apprScope, eq(approvals.status, "pending")));
 
   const importantEmails = await db
     .select()
     .from(emails)
-    .where(
-      and(
-        eq(emails.userId, userId),
-        eq(emails.status, "inbox"),
-        inArray(emails.priority, ["high", "urgent"]),
-      ),
-    )
+    .where(and(emailScope, eq(emails.status, "inbox"), inArray(emails.priority, ["high", "urgent"])))
     .limit(20);
 
   const leadEmails = await db
     .select()
     .from(emails)
-    .where(and(eq(emails.userId, userId), eq(emails.category, "lead"), eq(emails.status, "inbox")));
+    .where(and(emailScope, eq(emails.category, "lead"), eq(emails.status, "inbox")));
   const leadMessages = await db
     .select()
     .from(messages)
-    .where(and(eq(messages.userId, userId), eq(messages.classification, "lead"), eq(messages.status, "new")));
+    .where(and(msgScope, eq(messages.classification, "lead"), eq(messages.status, "new")));
 
   const urgent: string[] = [];
   if (overdue.length) urgent.push(`${overdue.length} משימות באיחור`);
@@ -83,7 +83,7 @@ export async function buildMorningBrief(userId: string, workspaceId?: string): P
   const complaints = await db
     .select()
     .from(messages)
-    .where(and(eq(messages.userId, userId), eq(messages.classification, "complaint"), eq(messages.status, "new")));
+    .where(and(msgScope, eq(messages.classification, "complaint"), eq(messages.status, "new")));
   if (complaints.length) urgent.push(`${complaints.length} תלונות בערוצים החברתיים`);
 
   const suggestedOrder: string[] = [
@@ -122,14 +122,77 @@ export async function buildMorningBrief(userId: string, workspaceId?: string): P
   };
 }
 
+export interface MiddayBrief {
+  generatedAt: string;
+  newSinceMorning: { id: string; from: string; text: string; channel: string }[];
+  awaitingReply: { id: string; from: string; text: string }[];
+  waitingApprovals: { id: string; title: string; shortCode: string | null; riskLevel: string }[];
+  nextItems: string[];
+}
+
+/** Lightweight midday check-in: what came in, what still needs a reply. */
+export async function buildMiddayBrief(userId: string, workspaceId?: string): Promise<MiddayBrief> {
+  const since = new Date(Date.now() - 5 * 3600_000).toISOString();
+  const [msgScope, apprScope] = await Promise.all([
+    listScope({ userId: messages.userId, workspaceId: messages.workspaceId }, userId, workspaceId),
+    listScope({ userId: approvals.userId, workspaceId: approvals.workspaceId }, userId, workspaceId),
+  ]);
+
+  const recent = await db
+    .select()
+    .from(messages)
+    .where(and(msgScope, gte(messages.receivedAt, since)))
+    .orderBy(desc(messages.receivedAt))
+    .limit(20);
+
+  const awaiting = await db
+    .select()
+    .from(messages)
+    .where(and(msgScope, inArray(messages.status, ["new", "waiting_approval"])))
+    .orderBy(desc(messages.receivedAt))
+    .limit(20);
+
+  const pending = await db
+    .select()
+    .from(approvals)
+    .where(and(apprScope, eq(approvals.status, "pending")))
+    .orderBy(desc(approvals.createdAt));
+
+  const nextItems: string[] = [];
+  if (pending.length) nextItems.push(`${pending.length} אישורים ממתינים`);
+  if (awaiting.length) nextItems.push(`${awaiting.length} הודעות בלי מענה`);
+
+  return {
+    generatedAt: nowIso(),
+    newSinceMorning: recent.map((m) => ({
+      id: m.id,
+      from: m.authorName || m.authorHandle,
+      text: m.text.slice(0, 120),
+      channel: m.channel,
+    })),
+    awaitingReply: awaiting.map((m) => ({ id: m.id, from: m.authorName || m.authorHandle, text: m.text.slice(0, 120) })),
+    waitingApprovals: pending.map((a) => ({
+      id: a.id,
+      title: a.title,
+      shortCode: a.shortCode,
+      riskLevel: a.riskLevel,
+    })),
+    nextItems,
+  };
+}
+
 export async function buildEndOfDayBrief(userId: string, workspaceId?: string): Promise<EndOfDayBrief> {
   const since = new Date(Date.now() - 24 * 3600_000).toISOString();
-  const wsFilter = workspaceId ? [eq(tasks.workspaceId, workspaceId)] : [];
+  const [taskScope, apprScope, actScope] = await Promise.all([
+    listScope({ userId: tasks.userId, workspaceId: tasks.workspaceId }, userId, workspaceId),
+    listScope({ userId: approvals.userId, workspaceId: approvals.workspaceId }, userId, workspaceId),
+    listScope({ userId: activityLogs.userId, workspaceId: activityLogs.workspaceId }, userId, workspaceId),
+  ]);
 
   const recentTasks = await db
     .select()
     .from(tasks)
-    .where(and(eq(tasks.userId, userId), ...wsFilter))
+    .where(taskScope)
     .orderBy(desc(tasks.updatedAt))
     .limit(100);
 
@@ -142,12 +205,12 @@ export async function buildEndOfDayBrief(userId: string, workspaceId?: string): 
   const todaysApprovals = await db
     .select()
     .from(approvals)
-    .where(and(eq(approvals.userId, userId), gte(approvals.updatedAt, since)));
+    .where(and(apprScope, gte(approvals.updatedAt, since)));
 
   const failures = await db
     .select()
     .from(activityLogs)
-    .where(and(eq(activityLogs.userId, userId), eq(activityLogs.result, "failure"), gte(activityLogs.createdAt, since)));
+    .where(and(actScope, eq(activityLogs.result, "failure"), gte(activityLogs.createdAt, since)));
 
   return {
     generatedAt: nowIso(),

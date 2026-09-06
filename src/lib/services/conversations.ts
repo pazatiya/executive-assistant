@@ -3,15 +3,20 @@ import { db } from "@/lib/db";
 import { conversationMessages, conversations } from "@/lib/db/schema";
 import { id } from "@/lib/ids";
 import { nowIso } from "@/lib/utils";
+import { canAccessRow, listScope } from "@/lib/auth/scope";
 
 export type Conversation = typeof conversations.$inferSelect;
 export type ConversationMessage = typeof conversationMessages.$inferSelect;
 
 export async function listConversations(userId: string) {
+  const where = await listScope(
+    { userId: conversations.userId, workspaceId: conversations.workspaceId },
+    userId,
+  );
   return db
     .select()
     .from(conversations)
-    .where(eq(conversations.userId, userId))
+    .where(where)
     .orderBy(desc(conversations.lastMessageAt))
     .limit(50);
 }
@@ -23,7 +28,7 @@ export async function getOrCreateConversation(
 ): Promise<Conversation> {
   if (conversationId) {
     const found = await db.query.conversations.findFirst({ where: eq(conversations.id, conversationId) });
-    if (found && found.userId === userId) return found;
+    if (found && (await canAccessRow(userId, found))) return found;
   }
   const row: Conversation = {
     id: id("conv"),

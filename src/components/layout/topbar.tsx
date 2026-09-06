@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import { AiStatusPill } from "./ai-status-pill";
 import { NotificationsBell } from "./notifications-bell";
@@ -16,12 +17,16 @@ export function Topbar({ workspaces, activeId, userName, notifications }: Props)
       <AiStatusPill />
       <div className="flex-1" />
       <NotificationsBell initialUnread={notifications} />
-      <div className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5">
+      <Link
+        href="/login"
+        title="החלפת משתמש"
+        className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 transition-colors hover:border-primary/40"
+      >
         <div className="flex size-6 items-center justify-center rounded-full bg-primary/20 text-xs font-semibold text-primary">
           {userName.slice(0, 1)}
         </div>
         <span className="text-sm">{userName}</span>
-      </div>
+      </Link>
     </header>
   );
 }

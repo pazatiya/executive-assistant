@@ -2,6 +2,7 @@ import { and, eq, lt } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { emails, messages, tasks } from "@/lib/db/schema";
 import { nowIso } from "@/lib/utils";
+import { listScope } from "@/lib/auth/scope";
 import { ModelRouter } from "@/lib/ai/model-router";
 
 export interface AdviceItem {
@@ -24,15 +25,19 @@ export async function generateAdvice(
 ): Promise<AdviceItem[]> {
   const items: AdviceItem[] = [];
   const dayAgo = new Date(Date.now() - 24 * 3600_000).toISOString();
+  const [emailScope, msgScope] = await Promise.all([
+    listScope({ userId: emails.userId, workspaceId: emails.workspaceId }, userId, workspaceId),
+    listScope({ userId: messages.userId, workspaceId: messages.workspaceId }, userId, workspaceId),
+  ]);
 
   const staleLeadEmails = await db
     .select()
     .from(emails)
-    .where(and(eq(emails.userId, userId), eq(emails.category, "lead"), eq(emails.status, "inbox"), lt(emails.receivedAt, dayAgo)));
+    .where(and(emailScope, eq(emails.category, "lead"), eq(emails.status, "inbox"), lt(emails.receivedAt, dayAgo)));
   const staleLeadMsgs = await db
     .select()
     .from(messages)
-    .where(and(eq(messages.userId, userId), eq(messages.classification, "lead"), eq(messages.status, "new"), lt(messages.receivedAt, dayAgo)));
+    .where(and(msgScope, eq(messages.classification, "lead"), eq(messages.status, "new"), lt(messages.receivedAt, dayAgo)));
 
   if (staleLeadEmails.length + staleLeadMsgs.length > 0) {
     items.push({
@@ -44,10 +49,15 @@ export async function generateAdvice(
     });
   }
 
+  const taskScope = await listScope(
+    { userId: tasks.userId, workspaceId: tasks.workspaceId },
+    userId,
+    workspaceId,
+  );
   const waiting = await db
     .select()
     .from(tasks)
-    .where(and(eq(tasks.userId, userId), eq(tasks.status, "waiting")));
+    .where(and(taskScope, eq(tasks.status, "waiting")));
   if (waiting.length >= 3) {
     items.push({
       kind: "bottleneck",
@@ -61,7 +71,7 @@ export async function generateAdvice(
   const overdue = await db
     .select()
     .from(tasks)
-    .where(and(eq(tasks.userId, userId), lt(tasks.dueDate, nowIso())));
+    .where(and(taskScope, lt(tasks.dueDate, nowIso())));
   const trulyOverdue = overdue.filter((t) => !["completed", "failed"].includes(t.status));
   if (trulyOverdue.length) {
     items.push({

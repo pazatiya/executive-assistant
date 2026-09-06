@@ -32,22 +32,37 @@ const hoursAhead = (h: number) => new Date(Date.now() + h * 3600_000).toISOStrin
 async function main() {
   console.log("→ seeding…");
 
-  // ── user ───────────────────────────────────────────────
-  let user = await db.query.users.findFirst({ where: eq(users.email, "pazyairat@gmail.com") });
-  if (!user) {
-    const uid = id("user");
-    await db.insert(users).values({
-      id: uid,
-      email: "pazyairat@gmail.com",
-      fullName: "פז",
-      timezone: "Asia/Jerusalem",
-      locale: "he",
-      preferences: { morningBriefAt: "07:30", endOfDayBriefAt: "18:30" },
-    });
-    user = await db.query.users.findFirst({ where: eq(users.id, uid) });
+  // ── users ──────────────────────────────────────────────
+  // Two owners: פז (management + personal) and יאיר (customers reach him).
+  const briefTimes = { morningBriefAt: "07:30", middayBriefAt: "13:30", endOfDayBriefAt: "18:30" };
+  const userSpecs = [
+    { email: "pazyairat@gmail.com", fullName: "פז" },
+    { email: "yair@dalor.co.il", fullName: "יאיר" },
+  ];
+  const userIds: Record<string, string> = {};
+  for (const spec of userSpecs) {
+    let u = await db.query.users.findFirst({ where: eq(users.email, spec.email) });
+    if (!u) {
+      const uid = id("user");
+      await db.insert(users).values({
+        id: uid,
+        email: spec.email,
+        fullName: spec.fullName,
+        timezone: "Asia/Jerusalem",
+        locale: "he",
+        preferences: briefTimes,
+      });
+      u = await db.query.users.findFirst({ where: eq(users.id, uid) });
+    }
+    if (!u) throw new Error(`user seed failed: ${spec.email}`);
+    userIds[spec.fullName] = u.id;
   }
+  const pazId = userIds["פז"];
+  const yairId = userIds["יאיר"];
+  // Most demo/business content is authored under פז; DALOR is shared with יאיר.
+  const user = await db.query.users.findFirst({ where: eq(users.id, pazId) });
   if (!user) throw new Error("user seed failed");
-  const userId = user.id;
+  const userId = pazId;
 
   // ── agents registry ────────────────────────────────────
   for (const a of AGENT_REGISTRY) {
@@ -64,34 +79,43 @@ async function main() {
   }
 
   // ── workspaces ─────────────────────────────────────────
+  // DALOR is shared (פז + יאיר). Each person gets a private personal workspace.
   const wsSpecs = [
-    { name: "Personal", type: "personal" as const, color: "#0ea5e9", icon: "user", desc: "אישי — משפחה, בריאות, כספים פרטיים" },
-    { name: "DALOR", type: "business" as const, color: "#6366f1", icon: "briefcase", desc: "DALOR — מספרה, מועדון לקוחות, קמפיינים, וואטסאפ" },
-    { name: "SHIRAOS", type: "business" as const, color: "#ec4899", icon: "gift", desc: "SHIRAOS — מארזי מתנה, אתר שיווקי, אינסטגרם" },
-    { name: "Other Projects", type: "project" as const, color: "#10b981", icon: "layers", desc: "פרויקטים נוספים ומשימות שלא שייכות ל-workspace ספציפי" },
+    { name: "אישי · פז", slug: "personal-paz", type: "personal" as const, color: "#0ea5e9", icon: "user", desc: "אישי — פז", owner: pazId, members: [pazId] },
+    { name: "אישי · יאיר", slug: "personal-yair", type: "personal" as const, color: "#0ea5e9", icon: "user", desc: "אישי — יאיר", owner: yairId, members: [yairId] },
+    { name: "DALOR", slug: "dalor", type: "business" as const, color: "#6366f1", icon: "briefcase", desc: "DALOR — מספרה, בגדים, מועדון לקוחות, קמפיינים, וואטסאפ", owner: pazId, members: [pazId, yairId] },
+    { name: "SHIRAOS", slug: "shiraos", type: "business" as const, color: "#ec4899", icon: "gift", desc: "SHIRAOS — מארזי מתנה, אתר שיווקי, אינסטגרם", owner: pazId, members: [pazId] },
+    { name: "Other Projects", slug: "other-projects", type: "project" as const, color: "#10b981", icon: "layers", desc: "פרויקטים נוספים", owner: pazId, members: [pazId] },
   ];
   const wsIds: Record<string, string> = {};
   for (const spec of wsSpecs) {
-    let ws = await db.query.workspaces.findFirst({ where: eq(workspaces.slug, spec.name.toLowerCase().replace(/\s+/g, "-")) });
+    let ws = await db.query.workspaces.findFirst({ where: eq(workspaces.slug, spec.slug) });
     if (!ws) {
       const wid = id("ws");
       await db.insert(workspaces).values({
         id: wid,
-        ownerId: userId,
+        ownerId: spec.owner,
         name: spec.name,
-        slug: spec.name.toLowerCase().replace(/\s+/g, "-"),
+        slug: spec.slug,
         type: spec.type,
         description: spec.desc,
         color: spec.color,
         icon: spec.icon,
         brandVoice:
-          spec.name === "DALOR"
-            ? { tone: "חם, ישיר, שירותי", formality: "casual", language: "he", doList: ["לפנות בשם הפרטי", "אימוג'י בודד מותר"], dontList: ["לא לכתוב מחיר בלי אישור"], signature: "צוות DALOR" }
-            : spec.name === "SHIRAOS"
+          spec.slug === "dalor"
+            ? { tone: "חם, ישיר, שירותי", formality: "casual", language: "he", doList: ["לפנות בשם הפרטי", "אימוג'י בודד מותר"], dontList: ["לא לכתוב מחיר בלי אישור", "אף פעם לא לומר 'אין לנו' על בגד — לבדוק מול יאיר"], signature: "צוות DALOR" }
+            : spec.slug === "shiraos"
               ? { tone: "אלגנטי, חמים", formality: "neutral", language: "he", signature: "SHIRAOS" }
               : {},
       });
-      await db.insert(workspaceMembers).values({ id: id("wm"), workspaceId: wid, userId, role: "owner" });
+      for (const memberId of spec.members) {
+        await db.insert(workspaceMembers).values({
+          id: id("wm"),
+          workspaceId: wid,
+          userId: memberId,
+          role: memberId === spec.owner ? "owner" : "admin",
+        });
+      }
       ws = await db.query.workspaces.findFirst({ where: eq(workspaces.id, wid) });
     }
     wsIds[spec.name] = ws!.id;
@@ -99,7 +123,8 @@ async function main() {
   const dalor = wsIds["DALOR"];
   const shiraos = wsIds["SHIRAOS"];
 
-  await ensureIntegrationRows(userId);
+  await ensureIntegrationRows(pazId);
+  await ensureIntegrationRows(yairId);
 
   // Always seed the permanent rules (real, not demo). Skip fake content when
   // SEED_DEMO=0 — use that for a clean production system.
@@ -115,8 +140,34 @@ async function main() {
       },
       {
         id: id("mem"), userId, workspaceId: null, type: "knowledge",
-        subject: "שעות פעילות", content: "המשרד פעיל א׳–ה׳ 9:00–18:00. לא לקבוע פגישות מחוץ לחלון הזה בלי לשאול.",
+        subject: "שעות פעילות משרד", content: "העבודה המשרדית א׳–ה׳ 9:00–18:00. לא לקבוע פגישות מחוץ לחלון הזה בלי לשאול.",
         importance: "normal", source: "user",
+      },
+      // ── DALOR — עובדות לתשובות אוטומטיות ולמזכירה (ניתן לעדכן במסך הזיכרון) ──
+      {
+        id: id("mem"), userId, workspaceId: dalor, type: "permanent",
+        subject: "חוק ברזל: אף פעם לא 'אין לנו' על בגד",
+        content:
+          "הקטלוג והבוט לא מעודכנים — רוב הפעמים יש בחנות דברים שלא באתר. אסור לענות ללקוח שאין פריט/מידה/צבע. תמיד: 'אני בודקת מול יאיר ואחזור אלייך' + להעלות לאישור.",
+        ruleKind: "do_not", ruleTarget: "clothing_availability", importance: "critical", source: "user",
+      },
+      {
+        id: id("mem"), userId, workspaceId: dalor, type: "knowledge",
+        subject: "שעות פתיחה — מספרה DALOR",
+        content: "מספרת DALOR: ימים א׳–ה׳ 08:00–20:00, יום ו׳ 08:00–14:00, שבת סגור.",
+        importance: "high", source: "user",
+      },
+      {
+        id: id("mem"), userId, workspaceId: dalor, type: "knowledge",
+        subject: "כתובת וחניה — DALOR",
+        content: "כתובת: אלי כהן 12, לוד. ניווט ווייז: https://waze.com/ul?q=אלי%20כהן%2012%20לוד&navigate=yes",
+        importance: "high", source: "user",
+      },
+      {
+        id: id("mem"), userId, workspaceId: dalor, type: "knowledge",
+        subject: "מחירון מספרה קבוע — DALOR",
+        content: "מחירון מספרה DALOR (קבוע): תספורת 50 ₪, תספורת + זקן 70 ₪, עיצוב זקן — יתעדכן. מחירי בגדים לא כאן — תמיד אישור.",
+        importance: "high", source: "user",
       },
     ]);
   }

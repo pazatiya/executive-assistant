@@ -8,6 +8,8 @@ import { createMemory } from "@/lib/services/memory";
 import { createApproval } from "@/lib/services/approvals";
 import { listApprovals } from "@/lib/services/approvals";
 import { listContacts } from "@/lib/services/contacts";
+import { listMessages } from "@/lib/services/messages";
+import { canAccessRow, listScope } from "@/lib/auth/scope";
 import { db } from "@/lib/db";
 import { emails, messages } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
@@ -152,9 +154,8 @@ const request_approval: ToolFn = async (ctx, input) => {
 const draft_email_reply: ToolFn = async (ctx, input) => {
   const emailId = String(input.emailId ?? "");
   const body = String(input.body ?? "");
-  const em = emailId
-    ? await db.query.emails.findFirst({ where: and(eq(emails.id, emailId), eq(emails.userId, ctx.userId)) })
-    : null;
+  const emRow = emailId ? await db.query.emails.findFirst({ where: eq(emails.id, emailId) }) : null;
+  const em = emRow && (await canAccessRow(ctx.userId, emRow)) ? emRow : null;
   await db
     .update(emails)
     .set({ draftReply: body, status: "waiting_approval" })
@@ -186,9 +187,8 @@ const draft_email_reply: ToolFn = async (ctx, input) => {
 const draft_message_reply: ToolFn = async (ctx, input) => {
   const messageId = String(input.messageId ?? "");
   const text = String(input.text ?? "");
-  const m = messageId
-    ? await db.query.messages.findFirst({ where: and(eq(messages.id, messageId), eq(messages.userId, ctx.userId)) })
-    : null;
+  const mRow = messageId ? await db.query.messages.findFirst({ where: eq(messages.id, messageId) }) : null;
+  const m = mRow && (await canAccessRow(ctx.userId, mRow)) ? mRow : null;
   await db.update(messages).set({ draftReply: text, status: "waiting_approval" }).where(eq(messages.id, messageId));
   const cls = await classifyAction({
     userId: ctx.userId,
@@ -228,15 +228,18 @@ const get_context: ToolFn = async (ctx, input) => {
     );
   }
   if (kind === "emails" || kind === "overview") {
-    out.inboxEmails = (
-      await db.select().from(emails).where(and(eq(emails.userId, ctx.userId), eq(emails.status, "inbox")))
-    )
+    const emailScope = await listScope(
+      { userId: emails.userId, workspaceId: emails.workspaceId },
+      ctx.userId,
+      ctx.workspaceId ?? undefined,
+    );
+    out.inboxEmails = (await db.select().from(emails).where(and(emailScope, eq(emails.status, "inbox"))))
       .slice(0, 15)
       .map((e) => ({ id: e.id, from: e.fromName || e.fromAddress, subject: e.subject, category: e.category, replyRequired: e.replyRequired }));
   }
   if (kind === "messages") {
     out.socialInbox = (
-      await db.select().from(messages).where(and(eq(messages.userId, ctx.userId), eq(messages.status, "new")))
+      await listMessages(ctx.userId, { workspaceId: ctx.workspaceId ?? undefined, statuses: ["new"] })
     ).map((m) => ({ id: m.id, channel: m.channel, from: m.authorHandle, text: m.text, classification: m.classification }));
   }
   if (kind === "contacts") {
@@ -257,6 +260,78 @@ const business_advice: ToolFn = async (ctx, input) => {
   return { ok: true, summary: "נוצרו המלצות עסקיות", data: { advice }, agent: "business_advisor" };
 };
 
+const check_availability: ToolFn = async (_ctx, input) => {
+  const { getDayAvailability } = await import("@/lib/integrations/dalor-barber");
+  const { parseAppointmentDate } = await import("./appointment-helper");
+  const date = String(input.date ?? "") || parseAppointmentDate(String(input.when ?? "")) || "";
+  if (!date) return { ok: false, summary: "צריך תאריך (YYYY-MM-DD) או 'מחר' וכו'" };
+  const day = await getDayAvailability(date);
+  return {
+    ok: true,
+    summary: day.freeSlots.length
+      ? `${date}: ${day.freeSlots.length} שעות פנויות (${day.freeSlots.slice(0, 10).join(", ")})`
+      : `${date}: אין תורים פנויים${day.reason ? ` — ${day.reason}` : ""}`,
+    data: { ...day },
+    agent: "task",
+  };
+};
+
+const todays_appointments: ToolFn = async (_ctx, input) => {
+  const { listAppointments } = await import("@/lib/integrations/dalor-barber");
+  const date = String(input.date ?? new Date().toISOString().slice(0, 10));
+  const list = await listAppointments({ date });
+  return {
+    ok: true,
+    summary: list.length ? `${date}: ${list.length} תורים` : `${date}: אין תורים`,
+    data: { date, appointments: list },
+    agent: "task",
+  };
+};
+
+const book_appointment: ToolFn = async (ctx, input) => {
+  const fullName = String(input.fullName ?? input.name ?? "");
+  const phone = String(input.phone ?? "");
+  const date = String(input.date ?? "");
+  const time = String(input.time ?? "");
+  if (!fullName || !phone || !date || !time)
+    return { ok: false, summary: "צריך שם, טלפון, תאריך ושעה" };
+  const cls = await classifyAction({
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+    actionType: "book_appointment",
+    targetSystem: "dalor_barber",
+  });
+  const a = await createApproval({
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+    title: `תור: ${fullName} — ${date} ${time}`,
+    context: `קביעת תור במספרה עבור ${fullName} (${phone})`,
+    actionType: "book_appointment",
+    actionPayload: { fullName, phone, date, time, notes: String(input.notes ?? ""), replyTo: phone },
+    targetSystem: "dalor_barber",
+    riskLevel: cls.riskLevel,
+    reason: cls.reason,
+    preview: `לקבוע תור ל-${fullName} (${phone}) ל-${date} בשעה ${time}`,
+    proposedBy: "task",
+    relatedConversationId: ctx.conversationId,
+  });
+  return { ok: true, summary: `בקשת תור הועלתה לאישור (${date} ${time})`, approvalId: a.id, agent: "task" };
+};
+
+const send_catalog_link: ToolFn = async (ctx, input) => {
+  const to = String(input.to ?? "");
+  const link = "https://dalor.co.il";
+  const text =
+    String(input.text ?? "") ||
+    `אפשר לראות את הקולקציה כאן: ${link} — ואם משהו מוצא חן, כתוב/כתבי לי ואני אבדוק מלאי מול יאיר.`;
+  if (to) {
+    const { WahaConnector, normalizeChatId } = await import("@/lib/integrations/waha");
+    const r = await new WahaConnector().executeAction("send_message", { to: normalizeChatId(to), text });
+    return { ok: r.ok, summary: r.ok ? "לינק לקטלוג נשלח" : `שליחה נכשלה: ${r.error}`, agent: "social" };
+  }
+  return { ok: true, summary: "טקסט לקטלוג מוכן", data: { text }, agent: "social" };
+};
+
 /* ────────────────────────── registry + schemas ────────────────────────── */
 
 export const TOOLS: Record<string, ToolFn> = {
@@ -270,6 +345,10 @@ export const TOOLS: Record<string, ToolFn> = {
   draft_message_reply,
   get_context,
   business_advice,
+  check_availability,
+  todays_appointments,
+  book_appointment,
+  send_catalog_link,
 };
 
 export async function runTool(name: string, ctx: AgentContext, input: Record<string, unknown>): Promise<ToolRunResult> {
@@ -419,5 +498,43 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
     name: "business_advice",
     description: "מפעיל את Business Advisor לזיהוי לידים ללא מענה, צווארי בקבוק, אוטומציות והזדמנויות.",
     parameters: { type: "object", properties: { topic: { type: "string" } } },
+  },
+  {
+    name: "check_availability",
+    description: "בודק אילו תורים פנויים במספרת DALOR ליום מסוים (קריאה בלבד). קבל date ב-YYYY-MM-DD או when כמו 'מחר'.",
+    parameters: {
+      type: "object",
+      properties: { date: { type: "string" }, when: { type: "string" } },
+    },
+  },
+  {
+    name: "todays_appointments",
+    description: "מחזיר את רשימת התורים במספרה ליום (ברירת מחדל: היום). דורש שאפליקציית התורים מחוברת.",
+    parameters: { type: "object", properties: { date: { type: "string" } } },
+  },
+  {
+    name: "book_appointment",
+    description:
+      "מעלה לאישור קביעת תור במספרה. חובה fullName, phone, date (YYYY-MM-DD), time (HH:MM). לא קובע בפועל עד אישור.",
+    parameters: {
+      type: "object",
+      properties: {
+        fullName: { type: "string" },
+        phone: { type: "string" },
+        date: { type: "string" },
+        time: { type: "string" },
+        notes: { type: "string" },
+      },
+      required: ["fullName", "phone", "date", "time"],
+    },
+  },
+  {
+    name: "send_catalog_link",
+    description:
+      "שולח ללקוח לינק לקטלוג הבגדים (או מכין טקסט). לא מנסה למכור לבד — רק מפנה. קבל to (מספר וואטסאפ) ואופציונלי text.",
+    parameters: {
+      type: "object",
+      properties: { to: { type: "string" }, text: { type: "string" } },
+    },
   },
 ];

@@ -5,6 +5,8 @@ import { id } from "@/lib/ids";
 import { nowIso } from "@/lib/utils";
 import { CatalogConnector, PROVIDER_CATALOG, specFor } from "./catalog";
 import { makeGoogleConnector } from "./google";
+import { makeWahaConnector } from "./waha";
+import { makeDalorBarberConnector } from "./dalor-barber";
 import type { Connector, ConnectorStatus } from "./connector";
 
 /**
@@ -13,7 +15,11 @@ import type { Connector, ConnectorStatus } from "./connector";
  * else falls back to CatalogConnector (reports not-connected + setup hint).
  */
 function makeRealConnector(provider: string, integrationId: string | null): Connector | null {
-  return makeGoogleConnector(provider, integrationId);
+  return (
+    makeGoogleConnector(provider, integrationId) ??
+    makeWahaConnector(provider, integrationId) ??
+    makeDalorBarberConnector(provider)
+  );
 }
 
 export async function getConnector(

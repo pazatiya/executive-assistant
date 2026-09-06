@@ -1,8 +1,9 @@
-import { and, asc, eq, lte, inArray } from "drizzle-orm";
+import { and, asc, eq, lte, inArray, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { notifications, reminders } from "@/lib/db/schema";
 import { id } from "@/lib/ids";
 import { nowIso } from "@/lib/utils";
+import { canAccessRow, listScope } from "@/lib/auth/scope";
 import { logActivity } from "./activity";
 
 export type Reminder = typeof reminders.$inferSelect;
@@ -56,8 +57,9 @@ export async function listReminders(
   userId: string,
   opts: { workspaceId?: string; statuses?: Reminder["status"][] } = {},
 ) {
-  const conds = [eq(reminders.userId, userId)];
-  if (opts.workspaceId) conds.push(eq(reminders.workspaceId, opts.workspaceId));
+  const conds: SQL[] = [
+    await listScope({ userId: reminders.userId, workspaceId: reminders.workspaceId }, userId, opts.workspaceId),
+  ];
   if (opts.statuses?.length) conds.push(inArray(reminders.status, opts.statuses));
   return db
     .select()
@@ -67,10 +69,8 @@ export async function listReminders(
 }
 
 export async function updateReminder(userId: string, remId: string, patch: Partial<Reminder>) {
-  const existing = await db.query.reminders.findFirst({
-    where: and(eq(reminders.id, remId), eq(reminders.userId, userId)),
-  });
-  if (!existing) return null;
+  const existing = await db.query.reminders.findFirst({ where: eq(reminders.id, remId) });
+  if (!existing || !(await canAccessRow(userId, existing))) return null;
   await db.update(reminders).set({ ...patch, updatedAt: nowIso() }).where(eq(reminders.id, remId));
   return db.query.reminders.findFirst({ where: eq(reminders.id, remId) });
 }
@@ -81,6 +81,18 @@ const RECURRENCE_MS: Record<string, number> = {
   weekly: 604800000,
   monthly: 2592000000,
 };
+
+/** Next occurrence for a recurrence rule, skipping Sat for "weekdays". */
+function nextDueAt(from: Date, recurrence: string): string | null {
+  const step = RECURRENCE_MS[recurrence];
+  if (!step) return null;
+  let next = new Date(from.getTime() + step);
+  if (recurrence === "weekdays") {
+    // Israeli work week: skip Saturday (getDay 6); Fri→Sun handled naturally
+    while (next.getDay() === 6) next = new Date(next.getTime() + 86400000);
+  }
+  return next.toISOString();
+}
 
 /**
  * Reminder engine tick — call from a cron / scheduled task. Fires everything due,
@@ -113,11 +125,11 @@ export async function processDueReminders(now = new Date()): Promise<Reminder[]>
       result: "info",
     });
 
-    const step = r.recurrence ? RECURRENCE_MS[r.recurrence] : undefined;
-    if (step) {
+    const nextAt = r.recurrence ? nextDueAt(new Date(r.dueAt), r.recurrence) : null;
+    if (nextAt) {
       await db
         .update(reminders)
-        .set({ dueAt: new Date(new Date(r.dueAt).getTime() + step).toISOString(), lastFiredAt: now.toISOString() })
+        .set({ dueAt: nextAt, lastFiredAt: now.toISOString() })
         .where(eq(reminders.id, r.id));
     } else {
       await db

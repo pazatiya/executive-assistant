@@ -1,8 +1,9 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { tasks } from "@/lib/db/schema";
 import { id } from "@/lib/ids";
 import { nowIso } from "@/lib/utils";
+import { canAccessRow, listScope } from "@/lib/auth/scope";
 import { logActivity } from "./activity";
 
 export type Task = typeof tasks.$inferSelect;
@@ -84,8 +85,8 @@ export async function createTask(input: CreateTaskInput): Promise<Task> {
 }
 
 export async function updateTask(userId: string, taskId: string, patch: Partial<Task>): Promise<Task | null> {
-  const existing = await db.query.tasks.findFirst({ where: and(eq(tasks.id, taskId), eq(tasks.userId, userId)) });
-  if (!existing) return null;
+  const existing = await db.query.tasks.findFirst({ where: eq(tasks.id, taskId) });
+  if (!existing || !(await canAccessRow(userId, existing))) return null;
   const next = { ...patch, updatedAt: nowIso() };
   if (patch.status === "completed" && !existing.completedAt) next.completedAt = nowIso();
   await db.update(tasks).set(next).where(eq(tasks.id, taskId));
@@ -106,8 +107,9 @@ export async function listTasks(
   userId: string,
   opts: { workspaceId?: string; statuses?: TaskStatus[]; goalId?: string; limit?: number } = {},
 ) {
-  const conds = [eq(tasks.userId, userId)];
-  if (opts.workspaceId) conds.push(eq(tasks.workspaceId, opts.workspaceId));
+  const conds: SQL[] = [
+    await listScope({ userId: tasks.userId, workspaceId: tasks.workspaceId }, userId, opts.workspaceId),
+  ];
   if (opts.goalId) conds.push(eq(tasks.goalId, opts.goalId));
   if (opts.statuses?.length) conds.push(inArray(tasks.status, opts.statuses));
   return db
@@ -119,5 +121,6 @@ export async function listTasks(
 }
 
 export async function getTask(userId: string, taskId: string) {
-  return db.query.tasks.findFirst({ where: and(eq(tasks.id, taskId), eq(tasks.userId, userId)) });
+  const row = await db.query.tasks.findFirst({ where: eq(tasks.id, taskId) });
+  return row && (await canAccessRow(userId, row)) ? row : undefined;
 }

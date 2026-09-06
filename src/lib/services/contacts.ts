@@ -1,8 +1,9 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { contacts } from "@/lib/db/schema";
 import { id } from "@/lib/ids";
 import { nowIso } from "@/lib/utils";
+import { canAccessRow, listScope } from "@/lib/auth/scope";
 
 export type Contact = typeof contacts.$inferSelect;
 
@@ -47,16 +48,15 @@ export async function createContact(input: CreateContactInput): Promise<Contact>
 }
 
 export async function listContacts(userId: string, opts: { workspaceId?: string } = {}) {
-  const conds = [eq(contacts.userId, userId)];
-  if (opts.workspaceId) conds.push(eq(contacts.workspaceId, opts.workspaceId));
+  const conds: SQL[] = [
+    await listScope({ userId: contacts.userId, workspaceId: contacts.workspaceId }, userId, opts.workspaceId),
+  ];
   return db.select().from(contacts).where(and(...conds)).orderBy(desc(contacts.importance), desc(contacts.updatedAt));
 }
 
 export async function updateContact(userId: string, contactId: string, patch: Partial<Contact>) {
-  const c = await db.query.contacts.findFirst({
-    where: and(eq(contacts.id, contactId), eq(contacts.userId, userId)),
-  });
-  if (!c) return null;
+  const c = await db.query.contacts.findFirst({ where: eq(contacts.id, contactId) });
+  if (!c || !(await canAccessRow(userId, c))) return null;
   await db.update(contacts).set({ ...patch, updatedAt: nowIso() }).where(eq(contacts.id, contactId));
   return db.query.contacts.findFirst({ where: eq(contacts.id, contactId) });
 }

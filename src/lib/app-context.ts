@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { approvals, notifications, tasks } from "@/lib/db/schema";
 import { getActiveWorkspaceId, getCurrentUser } from "@/lib/auth";
+import { listScope } from "@/lib/auth/scope";
 import { listWorkspaces } from "@/lib/services/workspaces";
 
 export async function loadAppContext() {
@@ -10,17 +11,19 @@ export async function loadAppContext() {
   const activeWorkspaceId = await getActiveWorkspaceId(user.id);
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0];
 
+  const [apprScope, taskScope] = await Promise.all([
+    listScope({ userId: approvals.userId, workspaceId: approvals.workspaceId }, user.id),
+    listScope({ userId: tasks.userId, workspaceId: tasks.workspaceId }, user.id),
+  ]);
+
   const [pendingApprovals, openTasks, unreadNotifs] = await Promise.all([
-    db
-      .select({ id: approvals.id })
-      .from(approvals)
-      .where(and(eq(approvals.userId, user.id), eq(approvals.status, "pending"))),
+    db.select({ id: approvals.id }).from(approvals).where(and(apprScope, eq(approvals.status, "pending"))),
     db
       .select({ id: tasks.id })
       .from(tasks)
       .where(
         and(
-          eq(tasks.userId, user.id),
+          taskScope,
           inArray(tasks.status, ["inbox", "planned", "in_progress", "waiting", "waiting_approval"]),
         ),
       ),
