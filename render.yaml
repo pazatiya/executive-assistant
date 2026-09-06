@@ -109,7 +109,7 @@ services:
         value: "true"
 
   # ── heartbeat ────────────────────────────────────────────────────
-  # No paid Render cron. A free external scheduler (cron-job.org) POSTs to
+  # No paid Render cron. A free UptimeRobot HTTP monitor hits
   #   https://<app>.onrender.com/api/scheduler/tick?secret=<CRON_SECRET>
-  # every 5 minutes — that also keeps the free web instance warm, so no
-  # separate UptimeRobot ping is needed. See DEPLOY.md.
+  # every 5 minutes — that fires the scheduler AND keeps the free web
+  # instance warm. See DEPLOY.md §3.

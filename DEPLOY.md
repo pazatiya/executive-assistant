@@ -60,32 +60,33 @@ Oracle — נזנח (חסימת הרשמה חוזרת).
 > הסכימה כבר נדחפה ל-Turso והבסיס הוזרע מהמחשב המקומי. שינויי סכימה עתידיים:
 > `LIBSQL_URL=… LIBSQL_AUTH_TOKEN=… npm run db:push` מקומית.
 
-## 3. תזמון — cron-job.org
+## 3. תזמון + שמירה על ער — UptimeRobot
 
-1. cron-job.org → הרשמה חינם → **Create cronjob**.
-2. URL: `https://<app>.onrender.com/api/scheduler/tick?secret=<CRON_SECRET>`
-   (`CRON_SECRET` — מ-Render → executive-assistant → Environment, אחרי הדפלוי הראשון)
-3. Method: **POST**. Schedule: **every 5 minutes**.
-4. זה גם שומר את ה-instance החינמי ער — אין צורך ב-UptimeRobot נפרד.
+מוניטור HTTP(s) יחיד עושה את שתי העבודות (מפעיל את ה-tick כל 5 דק' וגם שומר את
+ה-instance החינמי ער):
+
+1. UptimeRobot → **Add New Monitor** → סוג **HTTP(s)**.
+2. URL: `https://executive-assistant-nihe.onrender.com/api/scheduler/tick?secret=<CRON_SECRET>`
+   (`CRON_SECRET` — Render → executive-assistant → Environment → "Show secret". ה-`=` בסוף חייב `%3D` ב-URL.)
+3. Monitoring Interval: **5 minutes**.
 
 ## 4. קישור וואטסאפ (יאיר)
 
-ב-Render → `dalor-waha` → **Shell** (או דרך ה-API עם `WAHA_API_KEY`):
+ה-session `default` כבר נוצר ב-`dalor-waha` עם ה-webhook מוטמע. נשאר רק לסרוק QR
+מהטלפון של **יאיר** (972507983306). ה-QR מתחלף כל ~60 שניות — צריך שיאיר יהיה נוכח.
+
+מהמחשב:
 
 ```bash
-curl -s -X POST http://localhost:3000/api/sessions \
-  -H "X-Api-Key: $WAHA_API_KEY" -H "content-type: application/json" \
-  -d '{"name":"default","start":true}'
-
-curl -s "http://localhost:3000/api/default/auth/qr?format=image" \
-  -H "X-Api-Key: $WAHA_API_KEY" -o /tmp/wa-qr.png
+curl -s "https://dalor-waha.onrender.com/api/default/auth/qr?format=image" \
+  -H "X-Api-Key: <WAHA_API_KEY>" -o qr.png && open qr.png
 ```
 
-סורקים את ה-QR מהטלפון של **יאיר** → WhatsApp → מכשירים מקושרים → קשר מכשיר.
+יאיר: WhatsApp → הגדרות → מכשירים מקושרים → קשר מכשיר → סורק.
 
-בדיקה: `curl -s http://localhost:3000/api/sessions/default -H "X-Api-Key: $WAHA_API_KEY"` → `"status":"WORKING"`.
+בדיקה: `curl -s https://dalor-waha.onrender.com/api/sessions/default -H "X-Api-Key: <WAHA_API_KEY>"` → `"status":"WORKING"`.
 
-אז באפליקציה → **Integrations → WhatsApp → Connect** — זה רושם את ה-webhook.
+ה-webhook כבר מוטמע ב-session, אבל אפשר גם לוודא באפליקציה → **אינטגרציות → WhatsApp**.
 
 ## 5. הרצה ראשונה — `draft_only`
 
