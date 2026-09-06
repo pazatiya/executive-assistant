@@ -2,59 +2,52 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/*
+ * DALOR — dark, gold + rose-gold. Dark-only (the root layout forces `.dark`);
+ * :root mirrors it so any stray light context still renders on-brand.
+ * gold      ≈ hsl(41 58% 56%)   #C9A24C
+ * rose-gold ≈ hsl(3 44% 68%)    #D69A94
+ */
+:root,
+.dark {
   --font-sans: "Assistant", "Rubik", -apple-system, "Segoe UI", sans-serif;
 
-  --background: 0 0% 100%;
-  --foreground: 222 24% 12%;
-  --card: 0 0% 100%;
-  --card-foreground: 222 24% 12%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 222 24% 12%;
-  --primary: 243 75% 59%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 220 14% 96%;
-  --secondary-foreground: 222 24% 20%;
-  --muted: 220 14% 96%;
-  --muted-foreground: 220 9% 46%;
-  --accent: 243 75% 96%;
-  --accent-foreground: 243 55% 30%;
-  --destructive: 0 72% 51%;
-  --destructive-foreground: 0 0% 100%;
-  --success: 142 71% 40%;
-  --success-foreground: 0 0% 100%;
-  --warning: 38 92% 45%;
-  --warning-foreground: 0 0% 100%;
-  --border: 220 13% 91%;
-  --input: 220 13% 88%;
-  --ring: 243 75% 59%;
-  --radius: 0.75rem;
-}
+  --background: 24 12% 6%;
+  --foreground: 40 22% 90%;
+  --card: 24 11% 9%;
+  --card-foreground: 40 20% 91%;
+  --popover: 24 12% 8%;
+  --popover-foreground: 40 20% 91%;
 
-.dark {
-  --background: 224 32% 8%;
-  --foreground: 210 20% 92%;
-  --card: 224 28% 11%;
-  --card-foreground: 210 20% 92%;
-  --popover: 224 28% 11%;
-  --popover-foreground: 210 20% 92%;
-  --primary: 243 80% 67%;
-  --primary-foreground: 224 32% 8%;
-  --secondary: 223 20% 17%;
-  --secondary-foreground: 210 20% 88%;
-  --muted: 223 20% 16%;
-  --muted-foreground: 218 11% 60%;
-  --accent: 243 40% 22%;
-  --accent-foreground: 243 80% 85%;
-  --destructive: 0 63% 50%;
-  --destructive-foreground: 0 0% 100%;
-  --success: 142 60% 45%;
-  --success-foreground: 0 0% 100%;
-  --warning: 38 88% 55%;
-  --warning-foreground: 224 32% 8%;
-  --border: 223 18% 20%;
-  --input: 223 18% 24%;
-  --ring: 243 80% 67%;
+  /* gold — primary actions, active nav, focus ring */
+  --primary: 41 58% 56%;
+  --primary-foreground: 26 30% 8%;
+
+  --secondary: 24 9% 15%;
+  --secondary-foreground: 40 16% 86%;
+  --muted: 24 8% 14%;
+  --muted-foreground: 36 10% 62%;
+
+  /* rose-gold — soft highlights, badges, accent surfaces */
+  --accent: 3 30% 22%;
+  --accent-foreground: 5 48% 80%;
+
+  --destructive: 358 55% 52%;
+  --destructive-foreground: 20 20% 96%;
+  --success: 152 42% 45%;
+  --success-foreground: 24 12% 6%;
+  --warning: 41 58% 56%;
+  --warning-foreground: 26 30% 8%;
+
+  --border: 32 13% 17%;
+  --input: 32 12% 21%;
+  --ring: 41 58% 56%;
+  --radius: 0.75rem;
+
+  /* extra brand tokens for gradients / glows */
+  --gold: 41 58% 56%;
+  --gold-bright: 44 70% 66%;
+  --rose-gold: 5 44% 70%;
 }
 
 * {
@@ -80,5 +73,10 @@ body {
 }
 
 .risk-green { color: hsl(var(--success)); background: hsl(var(--success) / 0.12); }
-.risk-yellow { color: hsl(var(--warning)); background: hsl(var(--warning) / 0.14); }
-.risk-red { color: hsl(var(--destructive)); background: hsl(var(--destructive) / 0.14); }
+.risk-yellow { color: hsl(var(--gold-bright)); background: hsl(var(--gold) / 0.14); }
+.risk-red { color: hsl(var(--rose-gold)); background: hsl(var(--destructive) / 0.16); }
+
+/* subtle gold hairline under the top bar / on primary surfaces */
+.brand-glow { box-shadow: 0 0 0 1px hsl(var(--gold) / 0.25), 0 8px 30px hsl(var(--gold) / 0.08); }
+.text-gold { color: hsl(var(--gold-bright)); }
+.text-rose-gold { color: hsl(var(--rose-gold)); }
