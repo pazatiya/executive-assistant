@@ -55,7 +55,10 @@ Oracle — נזנח (חסימת הרשמה חוזרת).
 | `WAHA_API_KEY` | מחרוזת חזקה — **אותו ערך** ב-`executive-assistant` |
 | `WHATSAPP_API_KEY` | = `WAHA_API_KEY` |
 
-אחרי מילוי → **Manual Deploy** לשני השירותים. ה-`preDeployCommand` דוחף את הסכימה ל-Turso ומזריע.
+אחרי מילוי → **Manual Deploy** לשני השירותים.
+
+> הסכימה כבר נדחפה ל-Turso והבסיס הוזרע מהמחשב המקומי. שינויי סכימה עתידיים:
+> `LIBSQL_URL=… LIBSQL_AUTH_TOKEN=… npm run db:push` מקומית.
 
 ## 3. תזמון — cron-job.org
 
