@@ -126,7 +126,7 @@ export interface MiddayBrief {
   generatedAt: string;
   newSinceMorning: { id: string; from: string; text: string; channel: string }[];
   awaitingReply: { id: string; from: string; text: string }[];
-  waitingApprovals: { id: string; title: string; shortCode: string | null; riskLevel: string }[];
+  waitingApprovals: { id: string; title: string; riskLevel: string }[];
   nextItems: string[];
 }
 
@@ -171,12 +171,7 @@ export async function buildMiddayBrief(userId: string, workspaceId?: string): Pr
       channel: m.channel,
     })),
     awaitingReply: awaiting.map((m) => ({ id: m.id, from: m.authorName || m.authorHandle, text: m.text.slice(0, 120) })),
-    waitingApprovals: pending.map((a) => ({
-      id: a.id,
-      title: a.title,
-      shortCode: a.shortCode,
-      riskLevel: a.riskLevel,
-    })),
+    waitingApprovals: pending.map((a) => ({ id: a.id, title: a.title, riskLevel: a.riskLevel })),
     nextItems,
   };
 }

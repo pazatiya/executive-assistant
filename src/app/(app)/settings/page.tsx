@@ -1,4 +1,4 @@
-import { Cpu, Database, KeyRound, Bot, ShieldCheck } from "lucide-react";
+import { Cpu, Database, KeyRound, Bot, ShieldCheck, MessagesSquare } from "lucide-react";
 import { PageHeader, PageBody } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,6 +8,7 @@ import { agents } from "@/lib/db/schema";
 import { AI_MOCK_MODE, env } from "@/lib/env";
 import { ACTION_CATALOG } from "@/lib/approval/engine";
 import { ModelSwitcher } from "@/components/settings/model-switcher";
+import { AssistantModeToggle } from "@/components/settings/assistant-mode";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,16 @@ export default async function SettingsPage() {
     <>
       <PageHeader title="הגדרות" description="מודל AI, סוכנים, מדיניות אישורים, נתונים ואימות" />
       <PageBody className="grid gap-6 lg:grid-cols-2">
+        <Card className="lg:col-span-2">
+          <CardHeader className="flex-row items-center gap-2">
+            <MessagesSquare className="size-4" />
+            <CardTitle>מצב המזכירה מול לקוחות</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AssistantModeToggle />
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader className="flex-row items-center gap-2">
             <Cpu className="size-4" />

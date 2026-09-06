@@ -2,6 +2,7 @@ import Link from "next/link";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import { AiStatusPill } from "./ai-status-pill";
 import { NotificationsBell } from "./notifications-bell";
+import { PushRegister } from "@/components/push-register";
 
 interface Props {
   workspaces: { id: string; name: string; type: string; color: string }[];
@@ -16,6 +17,7 @@ export function Topbar({ workspaces, activeId, userName, notifications }: Props)
       <WorkspaceSwitcher workspaces={workspaces} activeId={activeId} />
       <AiStatusPill />
       <div className="flex-1" />
+      <PushRegister />
       <NotificationsBell initialUnread={notifications} />
       <Link
         href="/login"

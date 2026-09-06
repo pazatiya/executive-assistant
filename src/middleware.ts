@@ -13,6 +13,10 @@ const PUBLIC_PREFIXES = [
   "/api/reminders/tick",
   "/_next/",
   "/favicon",
+  "/sw.js",
+  "/manifest.webmanifest",
+  "/icon-",
+  "/badge.png",
 ];
 
 export function middleware(req: NextRequest) {

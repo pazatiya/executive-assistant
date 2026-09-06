@@ -45,8 +45,16 @@ export const env = {
   // customer messages land on יאיר's line; resolve owner + business workspace
   whatsappOwnerEmail: get("WHATSAPP_OWNER_EMAIL", "yair@dalor.co.il"),
   whatsappWorkspaceSlug: get("WHATSAPP_WORKSPACE_SLUG", "dalor"),
-  // owners' phone numbers for the command channel (briefs, approvals) — comma-separated
+  // owners' phone numbers — legacy; the owner command channel is retired (app-only now)
   ownerWhatsapp: get("OWNER_WHATSAPP"),
+
+  // push notifications (VAPID)
+  vapidPublic: get("VAPID_PUBLIC"),
+  vapidPrivate: get("VAPID_PRIVATE"),
+  vapidSubject: get("VAPID_SUBJECT", "mailto:dalor@dalor.co.il"),
+
+  // assistant autonomy default: "draft_only" (nothing auto-sends) | "active"
+  assistantModeDefault: (get("ASSISTANT_MODE", "draft_only") as "draft_only" | "active"),
 
   // DALOR barber booking app (dalorbook.duckdns.org)
   dalorBarberUrl: get("DALOR_BARBER_URL", "https://dalorbook.duckdns.org"),

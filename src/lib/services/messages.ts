@@ -109,3 +109,38 @@ export async function conversationWith(
     .limit(limit);
   return rows.reverse();
 }
+
+/** Owner sends a reply to a customer message (the AI draft, or an edited version). */
+export async function replyToMessage(
+  userId: string,
+  messageId: string,
+  text?: string,
+): Promise<{ ok: boolean; error?: string; sent?: boolean }> {
+  const row = await db.query.messages.findFirst({ where: eq(messages.id, messageId) });
+  if (!row || !(await canAccessRow(userId, row))) return { ok: false, error: "not_found" };
+  const body = (text ?? row.draftReply ?? "").trim();
+  if (!body) return { ok: false, error: "empty" };
+
+  const { executeAction } = await import("./action-executor");
+  const r = await executeAction({
+    userId,
+    workspaceId: row.workspaceId,
+    actionType: "reply_message",
+    payload: { messageId: row.id, to: row.authorHandle, text: body, channel: row.channel },
+    targetSystem: row.channel,
+  });
+  const sent = r.ok && r.data?.simulated !== true;
+  await db
+    .update(messages)
+    .set({ status: sent ? "replied" : "drafted", draftReply: body, updatedAt: nowIso() })
+    .where(eq(messages.id, row.id));
+  return { ok: r.ok, sent, error: r.ok ? undefined : r.error };
+}
+
+/** Owner dismisses a message — no reply needed (friend / spam / handled elsewhere). */
+export async function ignoreMessage(userId: string, messageId: string) {
+  const row = await db.query.messages.findFirst({ where: eq(messages.id, messageId) });
+  if (!row || !(await canAccessRow(userId, row))) return null;
+  await db.update(messages).set({ status: "ignored", updatedAt: nowIso() }).where(eq(messages.id, row.id));
+  return true;
+}

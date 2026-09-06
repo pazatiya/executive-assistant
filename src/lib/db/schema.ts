@@ -423,8 +423,6 @@ export const approvals = sqliteTable(
     reason: text("reason").notNull().default(""), // why approval is required
     preview: text("preview").notNull().default(""), // human-readable preview / draft content
     proposedBy: text("proposed_by").notNull().default("orchestrator"), // agent key
-    // short human code for approving from WhatsApp ("אשר A7"); unique among pending
-    shortCode: text("short_code"),
     status: text("status").$type<"pending" | "approved" | "edited_approved" | "rejected" | "expired" | "executed" | "failed">().notNull().default("pending"),
     decidedBy: text("decided_by"),
     decidedAt: text("decided_at"),
@@ -580,6 +578,25 @@ export const notifications = sqliteTable(
   (t) => ({ userIdx: index("notifications_user_idx").on(t.userId) }),
 );
 
+/* ───────────────────────────── push notifications ───────────────────────────── */
+
+export const pushSubscriptions = sqliteTable(
+  "push_subscriptions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull(),
+    // { p256dh, auth }
+    keys: text("keys", { mode: "json" }).$type<{ p256dh: string; auth: string }>().notNull(),
+    userAgent: text("user_agent"),
+    ...timestamps,
+  },
+  (t) => ({
+    uniq: uniqueIndex("push_subscriptions_endpoint_uniq").on(t.endpoint),
+    userIdx: index("push_subscriptions_user_idx").on(t.userId),
+  }),
+);
+
 /* ───────────────────────────── auth (dev driver) ───────────────────────────── */
 
 // Only used when AUTH_DRIVER=dev. Supabase Auth replaces this entirely.
@@ -614,5 +631,6 @@ export const schema = {
   conversationMessages,
   automationRules,
   notifications,
+  pushSubscriptions,
   devSessions,
 };

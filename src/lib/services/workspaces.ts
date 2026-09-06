@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { workspaceMembers, workspaces } from "@/lib/db/schema";
 import { id } from "@/lib/ids";
 import { nowIso } from "@/lib/utils";
+import { env } from "@/lib/env";
 import { isMember } from "@/lib/auth/scope";
 
 export type Workspace = typeof workspaces.$inferSelect;
@@ -67,4 +68,30 @@ export async function updateWorkspace(userId: string, workspaceId: string, patch
   if (!ws) return null;
   await db.update(workspaces).set({ ...patch, updatedAt: nowIso() }).where(eq(workspaces.id, workspaceId));
   return db.query.workspaces.findFirst({ where: eq(workspaces.id, workspaceId) });
+}
+
+export type AssistantMode = "draft_only" | "active";
+
+/**
+ * Autonomy for a workspace's assistant.
+ *  - draft_only: the assistant NEVER sends a customer message on its own —
+ *    every reply is a draft the owner sends from the app.
+ *  - active: whitelisted routine answers (hours / address / pricelist /
+ *    availability) send automatically; everything else still drafts.
+ */
+export async function getAssistantMode(workspaceId: string | null): Promise<AssistantMode> {
+  if (!workspaceId) return env.assistantModeDefault;
+  const ws = await db.query.workspaces.findFirst({ where: eq(workspaces.id, workspaceId) });
+  const s = (ws?.settings ?? {}) as { assistantMode?: AssistantMode };
+  return s.assistantMode === "active" || s.assistantMode === "draft_only"
+    ? s.assistantMode
+    : env.assistantModeDefault;
+}
+
+export async function setAssistantMode(userId: string, workspaceId: string, mode: AssistantMode) {
+  const ws = await getWorkspace(userId, workspaceId);
+  if (!ws) return null;
+  const settings = { ...(ws.settings as Record<string, unknown>), assistantMode: mode };
+  await db.update(workspaces).set({ settings, updatedAt: nowIso() }).where(eq(workspaces.id, workspaceId));
+  return mode;
 }

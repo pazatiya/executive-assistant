@@ -1,12 +1,18 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Assistant } from "next/font/google";
 import "./globals.css";
 
 const font = Assistant({ subsets: ["hebrew", "latin"], variable: "--font-sans", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "המזכירה — Executive Assistant",
-  description: "עוזרת אישית מבוססת AI: משימות, אישורים, מיילים, יומן, זיכרון ומרכז פעילות.",
+  title: "המזכירה — DALOR",
+  description: "עוזרת דיגיטלית ל-DALOR — לקוחות, תורים, תזכורות, סיכומים.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "המזכירה", statusBarStyle: "black-translucent" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#100e0c",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

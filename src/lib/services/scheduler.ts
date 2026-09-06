@@ -7,11 +7,10 @@ import { and, desc, eq, gte } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { notifications, users } from "@/lib/db/schema";
 import { env } from "@/lib/env";
-import { id } from "@/lib/ids";
 import { DEV_USERS } from "@/lib/auth";
 import { myWorkspaceIds } from "@/lib/auth/scope";
 import { buildMorningBrief, buildMiddayBrief, buildEndOfDayBrief } from "./brief";
-import { numberForEmail, sendToNumber } from "./notify-owner";
+import { notify } from "./notifications";
 import { logActivity } from "./activity";
 
 type BriefKind = "morning" | "midday" | "eod";
@@ -87,10 +86,7 @@ function fmtMidday(b: Awaited<ReturnType<typeof buildMiddayBrief>>): string {
         b.newSinceMorning.slice(0, 6).map((m) => `• ${m.from}: ${m.text}`).join("\n"),
     );
   if (b.waitingApprovals.length)
-    L.push(
-      "\n✅ ממתין לאישור:\n" +
-        b.waitingApprovals.map((a) => `• ${a.shortCode ? `[${a.shortCode}] ` : ""}${a.title}`).join("\n"),
-    );
+    L.push("\n✅ ממתין לאישור:\n" + b.waitingApprovals.map((a) => `• ${a.title}`).join("\n"));
   if (b.awaitingReply.length) L.push(`\n💬 ${b.awaitingReply.length} הודעות בלי מענה`);
   if (L.length === 1) L.push("\nשקט יחסי — הכול מטופל 🙂");
   return L.join("\n");
@@ -146,10 +142,8 @@ export async function runDueBriefs(now = new Date()): Promise<BriefRunResult[]> 
       }
 
       const text = await briefTextFor(u.id, kind);
-      await db.insert(notifications).values({
-        id: id("ntf"),
+      await notify({
         userId: u.id,
-        workspaceId: null,
         kind: "brief",
         title: `${LABEL[kind]} · ${date}`,
         body: text.slice(0, 2000),
@@ -157,18 +151,14 @@ export async function runDueBriefs(now = new Date()): Promise<BriefRunResult[]> 
         priority: "normal",
       });
 
-      const number = numberForEmail(spec.email);
-      let outcome: BriefRunResult["outcome"] = "notified_only";
-      if (number && (await sendToNumber(number, text))) outcome = "sent";
-
       await logActivity({
         userId: u.id,
         agent: "orchestrator",
-        action: `${LABEL[kind]} ${outcome === "sent" ? "נשלח בוואטסאפ" : "נשמר כהתראה"}`,
+        action: `${LABEL[kind]} נשלח (התראה + פוש)`,
         tool: "scheduler",
         result: "success",
       });
-      results.push({ user: spec.email, kind, outcome });
+      results.push({ user: spec.email, kind, outcome: "sent" });
     }
   }
   return results;

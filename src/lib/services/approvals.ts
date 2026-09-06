@@ -7,24 +7,7 @@ import { canAccessRow, listScope } from "@/lib/auth/scope";
 import type { RiskLevel } from "@/lib/approval/engine";
 import { logActivity } from "./activity";
 import { executeAction } from "./action-executor";
-
-const CODE_ALPHABET = "ABCDEFGHJKLMNPRTUVWXY"; // no I O Q S Z — unambiguous
-
-/** A short code unique among currently-pending approvals (e.g. "A7", "K3"). */
-async function nextShortCode(): Promise<string> {
-  const pending = await db
-    .select({ code: approvals.shortCode })
-    .from(approvals)
-    .where(eq(approvals.status, "pending"));
-  const taken = new Set(pending.map((p) => p.code).filter(Boolean));
-  for (let i = 0; i < 200; i++) {
-    const c =
-      CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)] +
-      String(Math.floor(Math.random() * 9) + 1);
-    if (!taken.has(c)) return c;
-  }
-  return id("apr").slice(-4).toUpperCase();
-}
+import { notifyOwnersOf } from "./notifications";
 
 export type Approval = typeof approvals.$inferSelect;
 
@@ -43,12 +26,11 @@ export interface CreateApprovalInput {
   relatedTaskId?: string | null;
   relatedConversationId?: string | null;
   expiresInHours?: number;
-  /** also push this approval to the owners' WhatsApp (default: true for yellow/red) */
+  /** also raise an app notification for the owners (default: true for yellow/red) */
   notifyOwners?: boolean;
 }
 
 export async function createApproval(input: CreateApprovalInput): Promise<Approval> {
-  const shortCode = await nextShortCode();
   const row: Approval = {
     id: id("apr"),
     userId: input.userId,
@@ -62,7 +44,6 @@ export async function createApproval(input: CreateApprovalInput): Promise<Approv
     reason: input.reason,
     preview: input.preview ?? "",
     proposedBy: input.proposedBy ?? "orchestrator",
-    shortCode,
     status: "pending",
     decidedBy: null,
     decidedAt: null,
@@ -92,24 +73,14 @@ export async function createApproval(input: CreateApprovalInput): Promise<Approv
 
   const shouldNotify = input.notifyOwners ?? input.riskLevel !== "green";
   if (shouldNotify) {
-    // dynamic import avoids a cycle (notify-owner → waha → …)
-    import("./notify-owner")
-      .then(({ notifyOwners, ownerNumbers }) => {
-        if (!ownerNumbers().length) return;
-        const riskTag = row.riskLevel === "red" ? "🔴 אדום" : "🟡 צהוב";
-        const text =
-          `${riskTag} · אישור ${shortCode}\n` +
-          `${row.title}\n` +
-          (row.reason ? `↳ ${row.reason}\n` : "") +
-          (row.preview ? `\n"${row.preview.slice(0, 500)}"\n` : "") +
-          `\nלאישור: אשר ${shortCode}  ·  לדחייה: דחה ${shortCode}  ·  לעריכה: ערוך ${shortCode}: <טקסט>`;
-        return notifyOwners(text, {
-          userId: input.userId,
-          workspaceId: input.workspaceId ?? null,
-          tag: `approval ${shortCode}`,
-        });
-      })
-      .catch(() => {});
+    await notifyOwnersOf(input.workspaceId ?? null, {
+      fallbackUserId: input.userId,
+      kind: "approval_pending",
+      title: `${row.riskLevel === "red" ? "🔴" : "🟡"} אישור: ${row.title}`,
+      body: row.reason || row.preview.slice(0, 140),
+      href: "/approvals",
+      priority: row.riskLevel === "red" ? "urgent" : "high",
+    }).catch(() => {});
   }
 
   return row;
@@ -134,14 +105,6 @@ export async function listApprovals(
 export async function getApproval(userId: string, aprId: string) {
   const row = await db.query.approvals.findFirst({ where: eq(approvals.id, aprId) });
   return row && (await canAccessRow(userId, row)) ? row : undefined;
-}
-
-/** Resolve a WhatsApp short code to its pending approval (owner command channel). */
-export async function getApprovalByShortCode(code: string) {
-  const norm = code.trim().toUpperCase();
-  return db.query.approvals.findFirst({
-    where: and(eq(approvals.shortCode, norm), eq(approvals.status, "pending")),
-  });
 }
 
 export type Decision = "approve" | "reject" | "edit_approve";

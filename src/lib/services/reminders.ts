@@ -1,9 +1,10 @@
 import { and, asc, eq, lte, inArray, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { notifications, reminders } from "@/lib/db/schema";
+import { reminders } from "@/lib/db/schema";
 import { id } from "@/lib/ids";
 import { nowIso } from "@/lib/utils";
 import { canAccessRow, listScope } from "@/lib/auth/scope";
+import { notify } from "./notifications";
 import { logActivity } from "./activity";
 
 export type Reminder = typeof reminders.$inferSelect;
@@ -106,14 +107,13 @@ export async function processDueReminders(now = new Date()): Promise<Reminder[]>
     .where(and(eq(reminders.status, "scheduled"), lte(reminders.dueAt, now.toISOString())));
 
   for (const r of due) {
-    await db.insert(notifications).values({
-      id: id("ntf"),
+    await notify({
       userId: r.userId,
       workspaceId: r.workspaceId,
       kind: "reminder",
-      title: `תזכורת: ${r.title}`,
+      title: `⏰ ${r.title}`,
       body: r.description || (r.condition ? `תנאי: ${r.condition}` : ""),
-      href: "/dashboard",
+      href: "/calendar",
       priority: r.kind === "deadline" ? "high" : "normal",
     });
     await logActivity({

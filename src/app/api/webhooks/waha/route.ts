@@ -5,17 +5,13 @@ import { resolveWhatsAppTarget } from "@/lib/integrations/whatsapp-context";
 import { createInboundMessage, findMessageByExternalId, updateMessage } from "@/lib/services/messages";
 import { triageMessage } from "@/lib/agents/message-triage";
 import { respondToMessage } from "@/lib/agents/message-responder";
-import { handleOwnerCommand } from "@/lib/agents/owner-commands";
-import { handleOwnerNote, resolveOwnerUser } from "@/lib/agents/owner-note";
-import { isOwnerNumber, notifyOwners, ownerNumbers } from "@/lib/services/notify-owner";
-import { WahaConnector, normalizeChatId } from "@/lib/integrations/waha";
 import { runAutomations } from "@/lib/automation/engine";
 
 export const dynamic = "force-dynamic";
 
 function secretOk(req: Request): boolean {
   const expected = env.wahaWebhookSecret;
-  if (!expected) return false; // fail closed — a secret must be configured
+  if (!expected) return false; // fail closed
   const url = new URL(req.url);
   const provided = url.searchParams.get("secret") ?? req.headers.get("x-webhook-secret") ?? "";
   const a = Buffer.from(provided);
@@ -24,9 +20,11 @@ function secretOk(req: Request): boolean {
 }
 
 /**
- * Inbound WhatsApp events from the local WAHA container.
- * Auth: shared secret (?secret= or X-Webhook-Secret) — WAHA has no signing on
- * the WEBJS engine, so the secret is the whole gate. Fails closed.
+ * Inbound WhatsApp — customer messages only.
+ *
+ * There is no owner command channel: the owners never text the assistant. All
+ * management happens in the app. Messages the assistant sends itself (fromMe),
+ * group messages, and messages from an owner's own number are ignored here.
  */
 export async function POST(req: Request) {
   if (!secretOk(req)) return new Response("unauthorized", { status: 401 });
@@ -40,38 +38,9 @@ export async function POST(req: Request) {
 
   const msg = parseInboundMessage(body);
   if (!msg) return Response.json({ ok: true, handled: "ignored" });
-  if (msg.isGroup || !msg.text) return Response.json({ ok: true, handled: "skipped" });
-
-  // ── owner command channel ────────────────────────────────────────────
-  // A message from an owner (self-chat, or one of OWNER_WHATSAPP) may be a
-  // command like "אשר A7". Customers can never reach this path.
-  const fromOwner = msg.fromMe || isOwnerNumber(msg.fromNumber);
-  if (fromOwner) {
-    const replyToOwner = async (text: string) => {
-      const waha = new WahaConnector();
-      const to = msg.fromMe ? null : normalizeChatId(msg.fromNumber);
-      if (to) await waha.executeAction("send_message", { to, text }).catch(() => {});
-      else if (ownerNumbers().length) await notifyOwners(text).catch(() => {});
-    };
-
-    const cmd = await handleOwnerCommand(msg.text, msg.fromMe ? "בעלים" : msg.fromNumber);
-    if (cmd.isCommand) {
-      if (cmd.reply) await replyToOwner(cmd.reply);
-      return Response.json({ ok: true, handled: "owner_command" });
-    }
-
-    // not a command → treat as a self-note: reminder / task
-    const ownerUserId = await resolveOwnerUser(msg.fromNumber, msg.fromMe);
-    if (ownerUserId) {
-      const note = await handleOwnerNote(msg.text, ownerUserId).catch(() => ({ handled: false }) as const);
-      if (note.handled) {
-        if (note.reply) await replyToOwner(note.reply);
-        return Response.json({ ok: true, handled: "owner_note" });
-      }
-    }
-    return Response.json({ ok: true, handled: "skipped_owner" });
+  if (msg.isGroup || !msg.text || msg.fromMe) {
+    return Response.json({ ok: true, handled: "skipped" });
   }
-  if (msg.fromMe) return Response.json({ ok: true, handled: "skipped" });
 
   const target = await resolveWhatsAppTarget();
   if (!target) return Response.json({ ok: false, handled: "no_target" }, { status: 503 });
@@ -93,7 +62,6 @@ export async function POST(req: Request) {
     source: "live",
   });
 
-  // triage → classify the row
   const triage = await triageMessage({
     text: msg.text,
     authorName: msg.authorName,
@@ -106,7 +74,6 @@ export async function POST(req: Request) {
       priority: triage.priority,
     })) ?? created;
 
-  // decide: auto-reply (whitelisted routine) or raise an approval
   let responded: Awaited<ReturnType<typeof respondToMessage>> | null = null;
   try {
     responded = await respondToMessage({
@@ -119,7 +86,6 @@ export async function POST(req: Request) {
     console.error("respondToMessage failed", e);
   }
 
-  // let automation rules react too (e.g. complaint → urgent task)
   await runAutomations(target.userId, "message.received", {
     workspaceId: target.workspaceId,
     messageId: created.id,
@@ -136,11 +102,10 @@ export async function POST(req: Request) {
     handled: "message",
     id: created.id,
     intent: triage.intent,
-    outcome: responded?.action ?? "logged_only",
+    outcome: responded?.action ?? "silent",
   });
 }
 
-// WAHA sometimes probes the URL with GET
 export async function GET() {
   return Response.json({ ok: true, service: "waha-webhook" });
 }
