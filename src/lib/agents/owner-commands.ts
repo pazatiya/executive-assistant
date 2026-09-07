@@ -20,6 +20,7 @@ const ALL = /(הכל|כולם|את כולם|all)\s*$/i;
 const APPROVE = /^(אשר|מאשר|אשרי|approve|לאשר)\s*(\d{1,2})?\s*(?:הכל|כולם|את כולם|all)?\s*$/i;
 const REJECT = /^(דחה|דחי|reject|לדחות|תדחה)\s*(\d{1,2})?\s*(?:הכל|כולם|את כולם|all)?\s*$/i;
 const STATUS = /^(סטטוס|status|מה קורה\??|מה יש\??|pending|ממתין|אישורים)\s*$/i;
+const GREETING = /^(היי+|הי|שלום|אהלן|בוקר טוב|ערב טוב|מה נשמע|מה קורה|hey|hi|hello)[\s!.?]*$/i;
 
 async function dalorWorkspaceId(): Promise<string | null> {
   const ws = await db.query.workspaces.findFirst({ where: eq(workspaces.slug, env.whatsappWorkspaceSlug) });
@@ -37,6 +38,19 @@ export async function handleOwnerCommand(ownerUserId: string, text: string): Pro
   const body = text.trim();
   const wsId = await dalorWorkspaceId();
   const scope = wsId ? { workspaceId: wsId } : {};
+  const owner = await db.query.users.findFirst({ where: eq(users.id, ownerUserId) });
+  const firstName = (owner?.fullName ?? "").split(/\s+/)[0];
+
+  // ── bare greeting → personal hello + what it can do ─────────────
+  if (GREETING.test(body)) {
+    return (
+      `היי${firstName ? " " + firstName : ""} 🙂 מה לעשות בשבילך?\n` +
+      "• תזכורת — \"תזכיר לי מחר ב-9 להתקשר לספק\"\n" +
+      "• מייל / הודעה — \"תשלחי מייל ל...\"\n" +
+      "• לחזור ללקוח — \"תחזרי ל-052... בקשר לחולצה\"\n" +
+      "• בדיקה — \"מה התורים היום?\" / \"סטטוס\" (אישורים ממתינים)"
+    );
+  }
 
   // ── status ──────────────────────────────────────────────────────
   if (STATUS.test(body)) {
