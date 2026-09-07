@@ -240,7 +240,14 @@ const get_context: ToolFn = async (ctx, input) => {
   if (kind === "messages") {
     out.socialInbox = (
       await listMessages(ctx.userId, { workspaceId: ctx.workspaceId ?? undefined, statuses: ["new"] })
-    ).map((m) => ({ id: m.id, channel: m.channel, from: m.authorHandle, text: m.text, classification: m.classification }));
+    ).map((m) => ({
+      id: m.id,
+      channel: m.channel,
+      name: m.authorName || null,
+      from: m.authorHandle,
+      text: m.text,
+      classification: m.classification,
+    }));
   }
   if (kind === "contacts") {
     out.contacts = (await listContacts(ctx.userId, { workspaceId: ctx.workspaceId })).map((c) => ({

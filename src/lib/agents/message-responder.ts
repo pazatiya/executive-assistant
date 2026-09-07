@@ -23,14 +23,13 @@ const AUTO_SEND_INTENTS = new Set([
   "appointment_confirm",
 ]);
 
-const INTRO = "כאן ג'ימי, העוזר הדיגיטלי של יאיר 🙂";
 const HOLDING = "קיבלתי 🙏 בודק ומחזיר לך תשובה עוד מעט.";
 const WELCOME =
   "היי! 🙂 כאן ג'ימי מ-DALOR — מספרה וחנות בגדים לגבר.\n" +
   "אפשר לשאול על שעות פתיחה, כתובת, מחירים, לתאם תור, או לשאול על בגדים.\n" +
-  'רוצה לדבר עם יאיר או פז? פשוט כתוב "נציג".';
+  'רוצה לדבר עם נציג? פשוט כתוב "נציג".';
 // customer wants a human — we ack and flag it, never keep chatting
-const HANDOFF = "בסדר גמור — מעביר אותך ליאיר/פז, הם יחזרו אלייך ממש בקרוב 🙂";
+const HANDOFF = "קיבלתי 🙏 העברתי את הפנייה שלך לנציג שירות, נחזור אליך בקרוב.";
 // clothing / product / order questions — iron rule, always check with the store
 const STORE_HOLDING = "בודק מול החנות מה יש ומחזיר לך תשובה בהקדם 👕";
 
@@ -100,7 +99,7 @@ async function composeDraft(
   facts: string,
   withIntro: boolean,
 ): Promise<{ text: string; grounded: boolean; bookingApprovalPayload?: Record<string, unknown> }> {
-  const prefix = withIntro ? INTRO + "\n" : "";
+  const prefix = withIntro ? WELCOME + "\n\n" : "";
 
   // ── bare greeting → a warm welcome ───────────────────────────────
   if (triage.intent === "greeting") {
@@ -173,6 +172,7 @@ async function composeDraft(
     const res = await ModelRouter.complete("writing", {
       system:
         "אתה ג'ימי, העוזר הדיגיטלי של DALOR (מספרה + בגדים לגבר). תשובה קצרה, חמה וישירה בעברית מדוברת בלשון זכר, אימוג'י בודד לכל היותר. " +
+        "הטון: אנושי וחם, אבל מקצועי מאוד. בלי בדיחות, בלי סלנג חברי, אל תדבר אל הלקוח כאילו אתה חבר שלו — אתה נציג שירות של העסק. " +
         "השתמש אך ורק בעובדות שסופקו. אם אין עובדה מדויקת — כתוב שתחזור עם תשובה. אסור להמציא מחירים, מלאי או שעות. אל תחתום בשם. " +
         (withIntro
           ? "פתחנו כבר במשפט היכרות — אל תוסיף ברכה, אל תפתח ב'היי' או 'שלום', עבור ישר לתשובה."
@@ -210,6 +210,9 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
   const { text: draft, grounded, bookingApprovalPayload } = await composeDraft(triage, msg, facts, withIntro);
 
   const who = msg.authorName || msg.authorHandle;
+  // always carries the phone, even when we also know a name — so a push
+  // notification alone is enough to call/text back, no need to open the app.
+  const whoWithPhone = msg.authorName ? `${msg.authorName} (${msg.authorHandle})` : msg.authorHandle;
   const isComplaint = triage.classification === "complaint" || triage.sentiment === "negative";
 
   // booking with a confirmed free slot → real action → approval (app)
@@ -256,7 +259,7 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
     await notifyOwnersOf(workspaceId, {
       fallbackUserId: ownerUserId,
       kind: "proactive",
-      title: isHuman ? `🙋 ${who} מבקש/ת לדבר עם נציג` : `👕 ${who} — שאלת בגדים/הזמנה`,
+      title: isHuman ? `🙋 ${whoWithPhone} מבקש/ת לדבר עם נציג` : `👕 ${whoWithPhone} — שאלת בגדים/הזמנה`,
       body: `"${msg.text}"\n\n${isHuman ? "היכנסו ל-הודעות וענו." : "צריך לבדוק מול החנות ולחזור ללקוח."}`,
       href: "/messages",
       priority: "high",
@@ -305,7 +308,7 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
   await notifyOwnersOf(workspaceId, {
     fallbackUserId: ownerUserId,
     kind: isComplaint ? "proactive" : "info",
-    title: isComplaint ? `⚠️ תלונה מ-${who}` : `הודעה מ-${who}`,
+    title: isComplaint ? `⚠️ תלונה מ-${whoWithPhone}` : `הודעה מ-${whoWithPhone}`,
     body: msg.text.slice(0, 140),
     href: "/messages",
     priority: isComplaint ? "urgent" : triage.priority === "urgent" ? "high" : "normal",
