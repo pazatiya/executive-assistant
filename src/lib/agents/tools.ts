@@ -332,9 +332,28 @@ const send_catalog_link: ToolFn = async (ctx, input) => {
   return { ok: true, summary: "טקסט לקטלוג מוכן", data: { text }, agent: "social" };
 };
 
+const reach_out_to_customer: ToolFn = async (ctx, input) => {
+  const phone = String(input.phone ?? input.to ?? "").trim();
+  if (!phone) return { ok: false, summary: "צריך מספר טלפון של הלקוח" };
+  const { reachOutToCustomer } = await import("@/lib/services/messages");
+  const r = await reachOutToCustomer({
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+    phone,
+    context: String(input.context ?? input.about ?? ""),
+    customerName: input.name ? String(input.name) : undefined,
+  });
+  return {
+    ok: r.ok,
+    summary: r.ok ? `נפתחה שיחה עם ${phone} (${r.via}) — תופיע ב"הודעות"` : `לא הצלחתי: ${r.error}`,
+    agent: "social",
+  };
+};
+
 /* ────────────────────────── registry + schemas ────────────────────────── */
 
 export const TOOLS: Record<string, ToolFn> = {
+  reach_out_to_customer,
   create_task,
   update_task,
   create_reminder,
@@ -535,6 +554,20 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
     parameters: {
       type: "object",
       properties: { to: { type: "string" }, text: { type: "string" } },
+    },
+  },
+  {
+    name: "reach_out_to_customer",
+    description:
+      "פותח שיחת וואטסאפ עם לקוח מהמספר העסקי של DALOR. משתמשים בזה כשלקוח כתב לקו הפרטי של פז/יאיר ורוצים שהמזכירה תיקח את הפנייה. קבל phone (מספר הלקוח), ואופציונלי context (על מה שאל) ו-name.",
+    parameters: {
+      type: "object",
+      properties: {
+        phone: { type: "string" },
+        context: { type: "string" },
+        name: { type: "string" },
+      },
+      required: ["phone"],
     },
   },
 ];
