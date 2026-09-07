@@ -2,7 +2,7 @@ import type { ToolSchema } from "@/lib/ai/provider";
 import type { AgentContext } from "./types";
 import { classifyAction, type ActionType } from "@/lib/approval/engine";
 import { createTask, updateTask, listTasks } from "@/lib/services/tasks";
-import { createReminder } from "@/lib/services/reminders";
+import { createReminder, listReminders } from "@/lib/services/reminders";
 import { createGoal } from "@/lib/services/goals";
 import { createMemory } from "@/lib/services/memory";
 import { createApproval } from "@/lib/services/approvals";
@@ -11,9 +11,25 @@ import { listContacts } from "@/lib/services/contacts";
 import { listMessages } from "@/lib/services/messages";
 import { canAccessRow, listScope } from "@/lib/auth/scope";
 import { db } from "@/lib/db";
-import { emails, messages } from "@/lib/db/schema";
+import { emails, messages, workspaces } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { logActivity } from "@/lib/services/activity";
+import { env } from "@/lib/env";
+
+/**
+ * A task/reminder created from an owner's WhatsApp message always defaults
+ * to ctx.workspaceId — their *personal* workspace — regardless of what it's
+ * actually about. "remind me to call the supplier" belongs there; "follow up
+ * with Avi about polo shirts" belongs in the DALOR business workspace. Let
+ * the model say which, instead of everything silently landing in personal.
+ */
+async function resolveTargetWorkspaceId(ctx: AgentContext, workspace: unknown): Promise<string> {
+  if (workspace === "business") {
+    const ws = await db.query.workspaces.findFirst({ where: eq(workspaces.slug, env.whatsappWorkspaceSlug) });
+    if (ws) return ws.id;
+  }
+  return ctx.workspaceId;
+}
 
 export interface ToolRunResult {
   ok: boolean;
@@ -32,7 +48,7 @@ type ToolFn = (ctx: AgentContext, input: Record<string, unknown>) => Promise<Too
 const create_task: ToolFn = async (ctx, input) => {
   const t = await createTask({
     userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
+    workspaceId: await resolveTargetWorkspaceId(ctx, input.workspace),
     title: String(input.title ?? "משימה"),
     description: String(input.description ?? ""),
     priority: (input.priority as "low" | "normal" | "high" | "urgent") ?? "normal",
@@ -74,7 +90,7 @@ const create_reminder: ToolFn = async (ctx, input) => {
   }
   const r = await createReminder({
     userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
+    workspaceId: await resolveTargetWorkspaceId(ctx, input.workspace),
     title: String(input.title ?? "תזכורת"),
     description: String(input.description ?? ""),
     kind: (input.kind as never) ?? "one_time",
@@ -250,22 +266,27 @@ const get_context: ToolFn = async (ctx, input) => {
       (t) => !["completed", "failed"].includes(t.status),
     ).slice(0, 15).map((t) => ({ id: t.id, title: t.title, status: t.status, priority: t.priority }));
   }
+  if (kind === "reminders" || kind === "overview") {
+    // There was previously no way at all for the model to check this — only
+    // create_reminder existed, no listing — so "do I have any reminders?"
+    // could only ever be a guess.
+    out.activeReminders = (await listReminders(ctx.userId, { statuses: ["scheduled", "snoozed"] }))
+      .slice(0, 15)
+      .map((r) => ({ id: r.id, title: r.title, dueAt: r.dueAt, kind: r.kind, status: r.status }));
+  }
   if (kind === "approvals" || kind === "overview") {
     out.pendingApprovals = (await listApprovals(ctx.userId, { statuses: ["pending"] })).map(
       (a) => ({ id: a.id, title: a.title, risk: a.riskLevel }),
     );
   }
   if (kind === "emails" || kind === "overview") {
-    const emailScope = await listScope(
-      { userId: emails.userId, workspaceId: emails.workspaceId },
-      ctx.userId,
-      ctx.workspaceId ?? undefined,
-    );
+    // Not scoped to ctx.workspaceId either — same reasoning as tasks/messages.
+    const emailScope = await listScope({ userId: emails.userId, workspaceId: emails.workspaceId }, ctx.userId);
     out.inboxEmails = (await db.select().from(emails).where(and(emailScope, eq(emails.status, "inbox"))))
       .slice(0, 15)
       .map((e) => ({ id: e.id, from: e.fromName || e.fromAddress, subject: e.subject, category: e.category, replyRequired: e.replyRequired }));
   }
-  if (kind === "messages") {
+  if (kind === "messages" || kind === "overview") {
     // Not just "new" — a message already auto-acked (e.g. "checking with the
     // store") is exactly the case where the owner comes back later to send
     // the real answer. Excluding anything but "new" made every such
@@ -291,8 +312,8 @@ const get_context: ToolFn = async (ctx, input) => {
       status: m.status,
     }));
   }
-  if (kind === "contacts") {
-    out.contacts = (await listContacts(ctx.userId, { workspaceId: ctx.workspaceId })).map((c) => ({
+  if (kind === "contacts" || kind === "overview") {
+    out.contacts = (await listContacts(ctx.userId, {})).map((c) => ({
       id: c.id,
       name: c.name,
       company: c.company,
@@ -443,10 +464,10 @@ export async function runTool(name: string, ctx: AgentContext, input: Record<str
 export const TOOL_SCHEMAS: ToolSchema[] = [
   {
     name: "get_context",
-    description: "טוען מצב נוכחי לפני החלטה: משימות פתוחות, אישורים ממתינים, תיבת מייל, הודעות ברשתות, אנשי קשר.",
+    description: "טוען מצב נוכחי לפני החלטה: משימות פתוחות, תזכורות פעילות, אישורים ממתינים, תיבת מייל, הודעות ברשתות, אנשי קשר.",
     parameters: {
       type: "object",
-      properties: { kind: { type: "string", enum: ["overview", "tasks", "approvals", "emails", "messages", "contacts"] } },
+      properties: { kind: { type: "string", enum: ["overview", "tasks", "reminders", "approvals", "emails", "messages", "contacts"] } },
       required: ["kind"],
     },
   },
@@ -463,6 +484,11 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
         plan: { type: "array", items: { type: "string" }, description: "שלבים קונקרטיים" },
         outcome: { type: "string", description: "מה נחשב לתוצאה מוצלחת / סגירה" },
         requiresApproval: { type: "boolean" },
+        workspace: {
+          type: "string",
+          enum: ["personal", "business"],
+          description: "'business' אם המשימה קשורה ללקוח/DALOR (למשל לחזור ללקוח בשם) — אחרת 'personal' (ברירת מחדל).",
+        },
       },
       required: ["title"],
     },
@@ -488,6 +514,11 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
         kind: { type: "string", enum: ["one_time", "recurring", "follow_up", "condition", "deadline", "pre_event"] },
         recurrence: { type: "string" },
         condition: { type: "string" },
+        workspace: {
+          type: "string",
+          enum: ["personal", "business"],
+          description: "'business' אם התזכורת קשורה ללקוח/DALOR — אחרת 'personal' (ברירת מחדל).",
+        },
       },
       required: ["title", "dueAt"],
     },
