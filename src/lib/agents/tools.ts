@@ -1,6 +1,6 @@
 import type { ToolSchema } from "@/lib/ai/provider";
 import type { AgentContext } from "./types";
-import { classifyAction, type ActionType } from "@/lib/approval/engine";
+import { classifyAction, ACTION_CATALOG, type ActionType } from "@/lib/approval/engine";
 import { createTask, updateTask, listTasks } from "@/lib/services/tasks";
 import { createReminder, listReminders } from "@/lib/services/reminders";
 import { createGoal } from "@/lib/services/goals";
@@ -565,7 +565,11 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
       properties: {
         title: { type: "string" },
         context: { type: "string" },
-        actionType: { type: "string" },
+        actionType: {
+          type: "string",
+          enum: Object.keys(ACTION_CATALOG),
+          description: "בחר בדיוק אחד מהערכים המוגדרים — אל תמציא ניסוח חדש (יחיד/רבים וכו'), אחרת האישור ידרוס בהמשך.",
+        },
         targetSystem: { type: "string" },
         target: { type: "string" },
         preview: { type: "string" },

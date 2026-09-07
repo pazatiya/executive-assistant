@@ -165,7 +165,9 @@ export async function executeAction(input: ExecuteInput): Promise<ExecuteResult>
       // "Delete" a reminder = cancel it, not a hard row delete — same reasoning
       // as tasks (complete_task above): keep the audit trail in /activity.
       case "delete_reminders":
-      case "cancel_reminders": {
+      case "delete_reminder":
+      case "cancel_reminders":
+      case "cancel_reminder": {
         const ids = Array.isArray(payload.reminderIds)
           ? (payload.reminderIds as string[])
           : payload.reminderId

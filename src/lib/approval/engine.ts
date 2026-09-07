@@ -49,7 +49,9 @@ export const ACTION_CATALOG = {
   sign_agreement: "red",
   delete_significant_data: "red",
   delete_reminders: "red",
+  delete_reminder: "red", // singular alias — the model doesn't always match the enum exactly
   cancel_reminders: "red",
+  cancel_reminder: "red",
   delete_account: "red",
   change_permissions: "red",
   send_sensitive_info: "red",
