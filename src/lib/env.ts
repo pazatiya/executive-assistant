@@ -43,6 +43,13 @@ export const env = {
   // URL WAHA (in Docker) uses to reach this app; host.docker.internal on Docker Desktop
   wahaWebhookUrl: get("WAHA_WEBHOOK_URL"),
   waCountryCode: get("WA_COUNTRY_CODE", "972"),
+
+  // WhatsApp — official Meta Cloud API (preferred once set; falls back to WAHA)
+  metaWaToken: get("META_WA_TOKEN"), // permanent (system-user) access token
+  metaWaPhoneNumberId: get("META_WA_PHONE_NUMBER_ID"),
+  metaWaVerifyToken: get("META_WA_VERIFY_TOKEN"), // our own string, echoed in the GET challenge
+  metaAppSecret: get("META_APP_SECRET"), // for X-Hub-Signature-256 verification
+  metaGraphVersion: get("META_GRAPH_VERSION", "v21.0"),
   // customer messages land on יאיר's line; resolve owner + business workspace
   whatsappOwnerEmail: get("WHATSAPP_OWNER_EMAIL", "yair@dalor.co.il"),
   whatsappWorkspaceSlug: get("WHATSAPP_WORKSPACE_SLUG", "dalor"),

@@ -4,7 +4,7 @@ import { emails, messages, tasks } from "@/lib/db/schema";
 import { nowIso } from "@/lib/utils";
 import { getConnector } from "@/lib/integrations/registry";
 import { createBooking } from "@/lib/integrations/dalor-barber";
-import { WahaConnector, normalizeChatId } from "@/lib/integrations/waha";
+import { sendWhatsApp } from "@/lib/integrations/whatsapp-send";
 
 export interface ExecuteInput {
   userId: string;
@@ -75,12 +75,9 @@ export async function executeAction(input: ExecuteInput): Promise<ExecuteResult>
 
         let sent: { simulated: boolean; providerId?: string } = { simulated: true };
         if (channel === "whatsapp" && to) {
-          const connector = await getConnector(input.userId, "whatsapp", null);
-          if (connector?.status === "connected") {
-            const r = await connector.executeAction("send_message", { to, text });
-            if (!r.ok) return { ok: false, actionType, detail: "", error: r.error ?? "WhatsApp send failed" };
-            sent = { simulated: false, providerId: (r.data?.chatId as string) ?? undefined };
-          }
+          const r = await sendWhatsApp(to, text);
+          if (!r.ok) return { ok: false, actionType, detail: "", error: r.error ?? "WhatsApp send failed" };
+          sent = { simulated: false, providerId: r.providerId };
         }
 
         if (messageId) {
@@ -139,14 +136,12 @@ export async function executeAction(input: ExecuteInput): Promise<ExecuteResult>
         // tell the customer it's confirmed
         const replyTo = String(payload.replyTo ?? payload.phone ?? "");
         if (replyTo) {
-          try {
-            await new WahaConnector().executeAction("send_message", {
-              to: normalizeChatId(replyTo),
-              text: `נקבע לך תור ל-${date} בשעה ${time} ✂️ נתראה! אם צריך לשנות — פשוט תכתוב לי כאן.`,
-            });
-          } catch {
+          await sendWhatsApp(
+            replyTo,
+            `נקבע לך תור ל-${date} בשעה ${time} ✂️ נתראה! אם צריך לשנות — פשוט תכתוב לי כאן.`,
+          ).catch(() => {
             /* best effort */
-          }
+          });
         }
         const messageId = payload.messageId as string | undefined;
         if (messageId)

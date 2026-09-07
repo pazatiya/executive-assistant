@@ -77,6 +77,15 @@ services:
         sync: false # same value as dalor-waha's WAHA_API_KEY
       - key: WAHA_WEBHOOK_SECRET
         sync: false # any strong string; the assistant embeds it in the webhook URL
+      # ── official WhatsApp (Meta Cloud API) — set these and Meta wins over WAHA ──
+      - key: META_WA_TOKEN
+        sync: false # permanent system-user access token
+      - key: META_WA_PHONE_NUMBER_ID
+        sync: false # from the WhatsApp → API Setup screen
+      - key: META_WA_VERIFY_TOKEN
+        sync: false # any string you choose; echoed in the webhook GET challenge
+      - key: META_APP_SECRET
+        sync: false # Meta app → Settings → Basic → App Secret
       - key: WAHA_BASE_URL
         fromService:
           type: web
