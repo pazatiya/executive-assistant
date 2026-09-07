@@ -1,6 +1,8 @@
 import { env } from "@/lib/env";
 import { metaVerifyChallenge, parseMetaInbound, parseMetaStatuses, verifyMetaSignature } from "@/lib/integrations/meta-whatsapp";
 import { ingestWhatsAppMessage } from "@/lib/agents/inbound-pipeline";
+import { resolveWhatsAppTarget } from "@/lib/integrations/whatsapp-context";
+import { notifyOwnersOf } from "@/lib/services/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +37,22 @@ export async function POST(req: Request) {
   for (const s of parseMetaStatuses(body)) {
     if (s.status === "failed") {
       console.error(`[meta-wa] ✗ FAILED to=${s.to} wamid=${s.wamid}${s.errorSummary ? ` (${s.errorSummary})` : ""}`);
+      // A send that looked ok at request time can still fail delivery
+      // (invalid number, blocked, etc.) — that's silent otherwise, so ping
+      // the owners rather than let it only exist in a log nobody reads.
+      resolveWhatsAppTarget()
+        .then((target) =>
+          target
+            ? notifyOwnersOf(target.workspaceId, {
+                fallbackUserId: target.userId,
+                kind: "proactive",
+                title: `✗ הודעה לא הגיעה ל-${s.to}`,
+                body: s.errorSummary || "השליחה נכשלה בפועל אחרי שנראתה מוצלחת בהתחלה.",
+                priority: "high",
+              })
+            : undefined,
+        )
+        .catch(() => {});
     } else {
       console.log(`[meta-wa] ${s.status === "read" ? "✓✓ read" : s.status === "delivered" ? "✓✓ delivered" : "✓ sent"} to=${s.to} wamid=${s.wamid}`);
     }
