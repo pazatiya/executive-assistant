@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Clock, Send, X, MessageCircle } from "lucide-react";
+import { Check, Clock, Send, X, MessageCircle, UserPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { timeAgo } from "@/lib/utils";
 
@@ -44,6 +44,32 @@ export function CustomerInbox({ messages }: { messages: InboxMessage[] }) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [filter, setFilter] = useState<"open" | "all">("open");
+  const [reachOpen, setReachOpen] = useState(false);
+  const [reach, setReach] = useState({ phone: "", name: "", context: "" });
+  const [reachMsg, setReachMsg] = useState<string | null>(null);
+
+  async function sendReachOut() {
+    if (!reach.phone.trim()) return;
+    setBusy("reach");
+    setReachMsg(null);
+    try {
+      const res = await fetch("/api/messages/reach-out", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(reach),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setReach({ phone: "", name: "", context: "" });
+        setReachOpen(false);
+        router.refresh();
+      } else {
+        setReachMsg(data?.error ?? "שליחה נכשלה");
+      }
+    } finally {
+      setBusy(null);
+    }
+  }
 
   const list = useMemo(
     () =>
@@ -68,16 +94,67 @@ export function CustomerInbox({ messages }: { messages: InboxMessage[] }) {
     }
   }
 
+  const reachPanel = (
+    <div className="mb-3">
+      <button
+        onClick={() => setReachOpen((v) => !v)}
+        className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm"
+      >
+        <UserPlus className="size-3.5" /> פנה ללקוח חדש
+      </button>
+      {reachOpen && (
+        <div className="mt-2 space-y-2 rounded-xl border p-3">
+          <p className="text-xs text-muted-foreground">
+            לקוח שכתב לפרטי שלך? תן לג׳ימי את המספר — הוא יפתח שיחה מהמספר של DALOR והשיחה תיכנס לכאן.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <input
+              value={reach.phone}
+              onChange={(e) => setReach((r) => ({ ...r, phone: e.target.value }))}
+              placeholder="מספר טלפון (05…)"
+              dir="ltr"
+              className="min-w-[9rem] flex-1 rounded-lg border bg-background px-3 py-1.5 text-sm"
+            />
+            <input
+              value={reach.name}
+              onChange={(e) => setReach((r) => ({ ...r, name: e.target.value }))}
+              placeholder="שם (לא חובה)"
+              className="min-w-[9rem] flex-1 rounded-lg border bg-background px-3 py-1.5 text-sm"
+            />
+          </div>
+          <input
+            value={reach.context}
+            onChange={(e) => setReach((r) => ({ ...r, context: e.target.value }))}
+            placeholder="על מה הוא שאל? (למשל: חולצה במידה L / תור לשישי)"
+            className="w-full rounded-lg border bg-background px-3 py-1.5 text-sm"
+          />
+          {reachMsg && <p className="text-xs text-red-400">{reachMsg}</p>}
+          <button
+            disabled={busy === "reach" || !reach.phone.trim()}
+            onClick={sendReachOut}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+          >
+            <Send className="size-3.5" /> פתח שיחה
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   if (!messages.length)
     return (
-      <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-        <MessageCircle className="mx-auto mb-2 size-6 opacity-50" />
-        אין הודעות מלקוחות עדיין. כשלקוח יכתוב בוואטסאפ — זה יופיע כאן.
+      <div>
+        {reachPanel}
+        <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+          <MessageCircle className="mx-auto mb-2 size-6 opacity-50" />
+          אין הודעות מלקוחות עדיין. כשלקוח יכתוב בוואטסאפ — זה יופיע כאן.
+        </div>
       </div>
     );
 
   return (
     <div>
+      {reachPanel}
       <div className="mb-3 flex items-center gap-2 text-sm">
         <button
           onClick={() => setFilter("open")}

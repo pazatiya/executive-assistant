@@ -50,6 +50,9 @@ export const env = {
   metaWaVerifyToken: get("META_WA_VERIFY_TOKEN"), // our own string, echoed in the GET challenge
   metaAppSecret: get("META_APP_SECRET"), // for X-Hub-Signature-256 verification
   metaGraphVersion: get("META_GRAPH_VERSION", "v21.0"),
+  // template used to open a conversation with a customer who wrote to a private line
+  metaOutreachTemplate: get("META_WA_OUTREACH_TEMPLATE", "customer_outreach"),
+  metaTemplateLang: get("META_WA_TEMPLATE_LANG", "he"),
   // customer messages land on יאיר's line; resolve owner + business workspace
   whatsappOwnerEmail: get("WHATSAPP_OWNER_EMAIL", "yair@dalor.co.il"),
   whatsappWorkspaceSlug: get("WHATSAPP_WORKSPACE_SLUG", "dalor"),

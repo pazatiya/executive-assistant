@@ -92,23 +92,13 @@ export function parseMetaInbound(raw: unknown): InboundMessage | null {
   return null;
 }
 
-/** Send a plain-text WhatsApp message. `to` may be any phone format. */
-export async function sendViaMeta(to: string, text: string): Promise<{ ok: boolean; id?: string; error?: string }> {
+async function postMessage(payload: Record<string, unknown>): Promise<{ ok: boolean; id?: string; error?: string }> {
   if (!metaWaConfigured()) return { ok: false, error: "Meta WhatsApp לא מוגדר" };
-  const number = chatIdToNumber(to);
   try {
     const res = await fetch(`${graphBase()}/${env.metaWaPhoneNumberId}/messages`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${env.metaWaToken}`,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to: number,
-        type: "text",
-        text: { body: text, preview_url: false },
-      }),
+      headers: { Authorization: `Bearer ${env.metaWaToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ messaging_product: "whatsapp", ...payload }),
     });
     const body = (await res.json().catch(() => null)) as
       | { messages?: { id?: string }[]; error?: { message?: string } }
@@ -118,4 +108,32 @@ export async function sendViaMeta(to: string, text: string): Promise<{ ok: boole
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/** Send a plain-text WhatsApp message. Only allowed inside the 24h service window. */
+export async function sendViaMeta(to: string, text: string) {
+  return postMessage({
+    to: chatIdToNumber(to),
+    type: "text",
+    text: { body: text, preview_url: false },
+  });
+}
+
+/**
+ * Open a conversation with a customer who never messaged the bot (e.g. they
+ * wrote to a private line). Meta requires an approved template for this.
+ * `bodyParams` fill the template's {{1}}, {{2}}… in order.
+ */
+export async function sendMetaTemplate(to: string, bodyParams: string[] = []) {
+  return postMessage({
+    to: chatIdToNumber(to),
+    type: "template",
+    template: {
+      name: env.metaOutreachTemplate,
+      language: { code: env.metaTemplateLang },
+      ...(bodyParams.length
+        ? { components: [{ type: "body", parameters: bodyParams.map((t) => ({ type: "text", text: t })) }] }
+        : {}),
+    },
+  });
 }

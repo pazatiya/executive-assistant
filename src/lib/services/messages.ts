@@ -137,6 +137,66 @@ export async function replyToMessage(
   return { ok: r.ok, sent, error: r.ok ? undefined : r.error };
 }
 
+/**
+ * Owner hands a customer to the assistant: the customer wrote to a private line,
+ * the owner types their number here, and the bot opens a WhatsApp conversation
+ * from the business number. From then on it's a normal inbox thread.
+ *
+ * On the official Meta API this first touch must be an approved template
+ * (24h-window rule); on WAHA it's a plain message.
+ */
+export async function reachOutToCustomer(input: {
+  userId: string;
+  workspaceId: string | null;
+  phone: string;
+  context: string;
+  customerName?: string;
+}): Promise<{ ok: boolean; via?: string; error?: string; messageId?: string }> {
+  const { normalizeChatId, chatIdToNumber } = await import("@/lib/integrations/waha");
+  const number = chatIdToNumber(normalizeChatId(input.phone));
+  if (number.length < 8) return { ok: false, error: "מספר לא תקין" };
+
+  const context = input.context.trim();
+  const { metaWaConfigured, sendMetaTemplate } = await import("@/lib/integrations/meta-whatsapp");
+  const { sendWhatsApp } = await import("@/lib/integrations/whatsapp-send");
+
+  let via: string;
+  let ok: boolean;
+  let error: string | undefined;
+  if (metaWaConfigured()) {
+    const r = await sendMetaTemplate(number, context ? [context] : []);
+    ok = r.ok;
+    error = r.error;
+    via = "meta-template";
+  } else {
+    const opener = context
+      ? `היי, כאן ג'ימי מ-DALOR 🙂 חזרנו אליך בנוגע ל${context}. איך אפשר לעזור?`
+      : `היי, כאן ג'ימי מ-DALOR 🙂 חזרנו אליך בהמשך לפנייה שלך. איך אפשר לעזור?`;
+    const r = await sendWhatsApp(number, opener);
+    ok = r.ok;
+    error = r.error;
+    via = r.via;
+  }
+  if (!ok) return { ok: false, via, error: error ?? "שליחה נכשלה" };
+
+  const row = await createInboundMessage({
+    userId: input.userId,
+    workspaceId: input.workspaceId,
+    channel: "whatsapp",
+    kind: "dm",
+    authorHandle: number,
+    authorName: input.customerName ?? null,
+    text: context ? `(פנייה יזומה) ${context}` : "(פנייה יזומה מהמערכת)",
+    classification: "lead",
+    source: "manual",
+  });
+  await db
+    .update(messages)
+    .set({ status: "replied", updatedAt: nowIso() })
+    .where(eq(messages.id, row.id));
+  return { ok: true, via, messageId: row.id };
+}
+
 /** Owner dismisses a message — no reply needed (friend / spam / handled elsewhere). */
 export async function ignoreMessage(userId: string, messageId: string) {
   const row = await db.query.messages.findFirst({ where: eq(messages.id, messageId) });
