@@ -240,13 +240,18 @@ const send_message_now: ToolFn = async (ctx, input) => {
 const get_context: ToolFn = async (ctx, input) => {
   const kind = String(input.kind ?? "overview");
   const out: Record<string, unknown> = {};
+  // Same reasoning as the messages branch below: an owner's WhatsApp command
+  // runs against their personal workspace, but a task/approval created about
+  // a DALOR customer lives in the business workspace — scoping to
+  // ctx.workspaceId made those invisible to get_context, so the model had no
+  // real id to act on (e.g. closing the very task it had just created).
   if (kind === "tasks" || kind === "overview") {
-    out.openTasks = (await listTasks(ctx.userId, { workspaceId: ctx.workspaceId })).filter(
+    out.openTasks = (await listTasks(ctx.userId, {})).filter(
       (t) => !["completed", "failed"].includes(t.status),
     ).slice(0, 15).map((t) => ({ id: t.id, title: t.title, status: t.status, priority: t.priority }));
   }
   if (kind === "approvals" || kind === "overview") {
-    out.pendingApprovals = (await listApprovals(ctx.userId, { workspaceId: ctx.workspaceId, statuses: ["pending"] })).map(
+    out.pendingApprovals = (await listApprovals(ctx.userId, { statuses: ["pending"] })).map(
       (a) => ({ id: a.id, title: a.title, risk: a.riskLevel }),
     );
   }
