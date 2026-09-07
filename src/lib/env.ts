@@ -56,8 +56,10 @@ export const env = {
   // customer messages land on יאיר's line; resolve owner + business workspace
   whatsappOwnerEmail: get("WHATSAPP_OWNER_EMAIL", "yair@dalor.co.il"),
   whatsappWorkspaceSlug: get("WHATSAPP_WORKSPACE_SLUG", "dalor"),
-  // owners' phone numbers — legacy; the owner command channel is retired (app-only now)
+  // owners' phone numbers: "email:number,email:number" — enables owner commands
+  // over WhatsApp AND owner reminders/summaries/approvals delivered to WhatsApp
   ownerWhatsapp: get("OWNER_WHATSAPP"),
+  ownerWaNotify: get("OWNER_WA_NOTIFY", "1") !== "0", // owner alerts also go to WhatsApp
 
   // push notifications (VAPID)
   vapidPublic: get("VAPID_PUBLIC"),
@@ -70,6 +72,7 @@ export const env = {
   // DALOR barber booking app (dalorbook.duckdns.org)
   dalorBarberUrl: get("DALOR_BARBER_URL", "https://dalorbook.duckdns.org"),
   dalorBarberAdminKey: get("DALOR_BARBER_ADMIN_KEY"),
+  apptReminderLeadHours: Number(get("APPT_REMINDER_LEAD_HOURS", "3.5")) || 3.5,
 
   // scheduler / cron auth (Stage 4)
   cronSecret: get("CRON_SECRET"),

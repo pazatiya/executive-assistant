@@ -44,8 +44,12 @@ services:
         value: yair@dalor.co.il
       - key: WHATSAPP_WORKSPACE_SLUG
         value: dalor
+      - key: OWNER_WHATSAPP
+        sync: false # "email:number,email:number" — enables owner WhatsApp commands + alerts
       - key: DALOR_BARBER_URL
         value: https://dalorbook.duckdns.org
+      - key: APPT_REMINDER_LEAD_HOURS
+        value: "3.5"
       - key: WA_COUNTRY_CODE
         value: "972"
       - key: WAHA_SESSION

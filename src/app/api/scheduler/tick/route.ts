@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { env } from "@/lib/env";
 import { processDueReminders } from "@/lib/services/reminders";
 import { runDueBriefs } from "@/lib/services/scheduler";
+import { runAppointmentReminders } from "@/lib/services/appointment-reminders";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -27,9 +28,10 @@ function authorized(req: Request): boolean {
 export async function POST(req: Request) {
   if (!authorized(req)) return new Response("unauthorized", { status: 401 });
 
-  const [reminders, briefs] = await Promise.all([
+  const [reminders, briefs, appts] = await Promise.all([
     processDueReminders().catch((e) => ({ error: String(e) })),
     runDueBriefs().catch((e) => ({ error: String(e) })),
+    runAppointmentReminders().catch((e) => ({ error: String(e) })),
   ]);
 
   return Response.json({
@@ -37,6 +39,9 @@ export async function POST(req: Request) {
     at: new Date().toISOString(),
     reminders: Array.isArray(reminders) ? reminders.length : reminders,
     briefs: Array.isArray(briefs) ? briefs.filter((b) => b.outcome !== "not_due") : briefs,
+    appointmentReminders: Array.isArray(appts)
+      ? appts.filter((a) => a.outcome !== "skipped_already")
+      : appts,
   });
 }
 

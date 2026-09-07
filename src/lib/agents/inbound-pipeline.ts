@@ -7,19 +7,32 @@
  */
 import type { InboundMessage } from "@/lib/integrations/waha";
 import { resolveWhatsAppTarget } from "@/lib/integrations/whatsapp-context";
+import { isOwnerNumber, ownerUserIdForNumber } from "@/lib/integrations/owners";
+import { sendWhatsApp } from "@/lib/integrations/whatsapp-send";
+import { handleOwnerCommand } from "@/lib/agents/owner-commands";
 import { createInboundMessage, findMessageByExternalId, updateMessage } from "@/lib/services/messages";
 import { triageMessage } from "@/lib/agents/message-triage";
 import { respondToMessage } from "@/lib/agents/message-responder";
 import { runAutomations } from "@/lib/automation/engine";
 
 export type IngestResult =
-  | { ok: true; handled: "ignored" | "skipped" | "duplicate" }
+  | { ok: true; handled: "ignored" | "skipped" | "duplicate" | "owner_command" }
   | { ok: false; handled: "no_target" }
   | { ok: true; handled: "message"; id: string; intent: string; outcome: string };
 
 export async function ingestWhatsAppMessage(msg: InboundMessage | null): Promise<IngestResult> {
   if (!msg) return { ok: true, handled: "ignored" };
   if (msg.isGroup || !msg.text || msg.fromMe) return { ok: true, handled: "skipped" };
+
+  // A message from an owner's own number is a command, not a customer.
+  if (isOwnerNumber(msg.fromNumber)) {
+    const ownerId = await ownerUserIdForNumber(msg.fromNumber);
+    if (ownerId) {
+      const reply = await handleOwnerCommand(ownerId, msg.text);
+      await sendWhatsApp(msg.fromNumber, reply).catch(() => {});
+      return { ok: true, handled: "owner_command" };
+    }
+  }
 
   const target = await resolveWhatsAppTarget();
   if (!target) return { ok: false, handled: "no_target" };

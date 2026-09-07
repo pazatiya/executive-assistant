@@ -7,10 +7,28 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { notifications, workspaceMembers } from "@/lib/db/schema";
 import { id } from "@/lib/ids";
+import { env } from "@/lib/env";
 import { sendPushToUser } from "./push";
 
 type Kind = typeof notifications.$inferSelect["kind"];
 type Priority = typeof notifications.$inferSelect["priority"];
+
+// alert kinds worth a WhatsApp ping to the owner (routine "info" is app-only)
+const WA_KINDS = new Set<Kind>(["approval_pending", "reminder", "brief", "task_overdue", "proactive"]);
+
+async function pingOwnerWhatsApp(userId: string, input: NotifyInput): Promise<void> {
+  if (!env.ownerWaNotify || !input.kind || !WA_KINDS.has(input.kind)) return;
+  try {
+    const { ownerNumberForUserId } = await import("@/lib/integrations/owners");
+    const number = await ownerNumberForUserId(userId);
+    if (!number) return;
+    const { sendWhatsApp } = await import("@/lib/integrations/whatsapp-send");
+    const text = input.body ? `${input.title}\n\n${input.body}` : input.title;
+    await sendWhatsApp(number, text.slice(0, 3500));
+  } catch {
+    /* best effort — the in-app row + push already landed */
+  }
+}
 
 export interface NotifyInput {
   userId: string;
@@ -40,6 +58,7 @@ export async function notify(input: NotifyInput): Promise<void> {
     href: input.href,
     tag: input.kind,
   }).catch(() => {});
+  await pingOwnerWhatsApp(input.userId, input);
 }
 
 /** Every member of a workspace (the owners) gets the notification. */
