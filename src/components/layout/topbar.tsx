@@ -2,6 +2,7 @@ import Link from "next/link";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 import { AiStatusPill } from "./ai-status-pill";
 import { NotificationsBell } from "./notifications-bell";
+import { MobileNav } from "./mobile-nav";
 import { PushRegister } from "@/components/push-register";
 
 interface Props {
@@ -9,11 +10,13 @@ interface Props {
   activeId: string;
   userName: string;
   notifications: number;
+  counts: Record<string, number>;
 }
 
-export function Topbar({ workspaces, activeId, userName, notifications }: Props) {
+export function Topbar({ workspaces, activeId, userName, notifications, counts }: Props) {
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-card/40 px-4">
+      <MobileNav counts={counts} />
       <WorkspaceSwitcher workspaces={workspaces} activeId={activeId} />
       <AiStatusPill />
       <div className="flex-1" />

@@ -17,6 +17,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           activeId={activeWorkspace.id}
           userName={user.fullName || user.email}
           notifications={counts.notifications}
+          counts={counts}
         />
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
