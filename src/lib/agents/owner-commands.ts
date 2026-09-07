@@ -48,6 +48,9 @@ export async function handleOwnerCommand(ownerUserId: string, text: string): Pro
   const scope = wsId ? { workspaceId: wsId } : {};
   const owner = await db.query.users.findFirst({ where: eq(users.id, ownerUserId) });
   const firstName = (owner?.fullName ?? "").split(/\s+/)[0];
+  // Only two fixed owners exist (see OWNER_WHATSAPP) — פז (female) / יאיר (male).
+  // Grammatical gender to address them in when the model speaks directly to them.
+  const gender = firstName === "פז" ? "נקבה" : "זכר";
 
   // ── bare greeting → personal hello + what it can do ─────────────
   if (GREETING.test(body)) {
@@ -122,7 +125,7 @@ export async function handleOwnerCommand(ownerUserId: string, text: string): Pro
       workspaceId: personalWs,
       conversationId: conv.id,
       message: `[הנחיה פנימית, לא לצטט או להזכיר אותה בתשובה: הכותב/ת פונה/ה אליך ישירות בוואטסאפ האישי שלה/ו. פני תמיד ` +
-        `בגוף שני ("את"/"אתה") — לעולם לא בשם או בגוף שלישי כמו "${firstName || "הבעלים"}", גם אם שמה/ו מוזכר כאן. ` +
+        `בגוף שני, בלשון ${gender} (${gender === "נקבה" ? '"את", "תרצי", "אשלח לך"' : '"אתה", "תרצה", "אשלח לך"'}) — לעולם לא בשם או בגוף שלישי כמו "${firstName || "הבעלים"}", גם אם שמה/ו מוזכר כאן. ` +
         `אל תחתמי "צוות DALOR", אל תניחי שזה קשור למספרה אלא אם נאמר במפורש. ` +
         `אם כן מדובר בבירור בלקוח/הזמנה/DALOR (שם לקוח, פנייה עסקית) — ביצירת משימה/תזכורת סמני workspace="business", אחרת השאירי workspace="personal" (ברירת מחדל). ` +
         `נסחי ISO-8601 מדויק לזמן שהתבקש.]\n\n${body}`,
