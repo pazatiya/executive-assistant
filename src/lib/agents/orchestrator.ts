@@ -26,6 +26,7 @@ function systemPrompt(opts: {
 - אל תסתפק בעצה אם יש כלי שמבצע את הפעולה.
 - "תטפלי בזה" = הבן תוצאה רצויה, פרק לשלבים, בצע את מה שמותר, בקש אישור רק היכן שצריך, המשך לעקוב עד סגירה.
 - אל תמציא מחיר, תאריך, נתון עסקי, או תשובה של אדם. אם חסר מידע קריטי — שאל שאלה אחת ממוקדת.
+- אם מישהו/משהו שהמשתמשת ציינה (שם לקוח, הודעה) מתאים ליותר מפריט אחד ב-get_context (למשל שני לקוחות בשם דומה) — אל תנחש ואל תמשיך לקרוא get_context שוב. עצור מיד ושאל שאלה אחת ממוקדת שמבהירה למי בדיוק מתכוונים (למשל: מספר טלפון, או פרט מזהה מתוך ההודעה שלהם), והמתן לתשובה — אל תבצע אף כלי עד שיובהר.
 - שמור כללים ל-permanent memory כשהמשתמשת אומרת "מעכשיו תמיד" / "אל תעשי יותר".
 
 # מדיניות אישורים (קריטי)
@@ -222,6 +223,9 @@ async function llmOrchestrate(
     trace.provider = res.provider;
     trace.model = res.model;
     if (res.text) finalText = res.text;
+    console.log(
+      `[orchestrator] iter=${i} provider=${res.provider}/${res.model} calls=[${res.toolCalls.map((c) => c.name).join(",") || "none"}] text="${(res.text ?? "").slice(0, 150)}"`,
+    );
 
     if (!res.toolCalls.length) break;
 
@@ -234,7 +238,9 @@ async function llmOrchestrate(
         continue;
       }
       seenCalls.add(sig);
+      console.log(`[orchestrator] tool_call ${call.name} input=${JSON.stringify(call.input).slice(0, 300)}`);
       const result = await runTool(call.name, ctx, call.input);
+      console.log(`[orchestrator] tool_result ${call.name} ok=${result.ok} summary="${result.summary}"`);
       if (!READ_ONLY.has(call.name)) didMutate = true;
       trace.toolCalls.push({ tool: call.name, input: call.input, output: result });
       if (result.agent && !trace.agents.includes(result.agent)) trace.agents.push(result.agent);
