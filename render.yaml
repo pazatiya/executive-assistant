@@ -34,7 +34,7 @@ services:
       - key: AI_DEFAULT_PROVIDER
         value: google
       - key: GOOGLE_MODEL
-        value: gemini-3.5-flash-lite # big free quota, handles tool-calling; flash proper has a tiny free tier
+        value: gemini-3.5-flash # $40 Gemini API credits on the key → paid tier, no quota wall
       - key: APP_TIMEZONE
         value: Asia/Jerusalem
       - key: ASSISTANT_MODE
