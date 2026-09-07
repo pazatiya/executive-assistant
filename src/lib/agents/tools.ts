@@ -265,9 +265,14 @@ const get_context: ToolFn = async (ctx, input) => {
     // store") is exactly the case where the owner comes back later to send
     // the real answer. Excluding anything but "new" made every such
     // follow-up read as "no message found from X".
+    // Deliberately NOT scoped to ctx.workspaceId: an owner's WhatsApp command
+    // runs against their *personal* workspace by default, but the customer
+    // message they're asking about lives in the DALOR business workspace —
+    // scoping this to ctx.workspaceId meant it always came back empty for
+    // exactly the "reply to a customer" case this is for. listMessages with
+    // no workspaceId searches every workspace this user belongs to.
     out.socialInbox = (
       await listMessages(ctx.userId, {
-        workspaceId: ctx.workspaceId ?? undefined,
         statuses: ["new", "drafted", "waiting_approval", "replied"],
         limit: 30,
       })
