@@ -13,20 +13,25 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async complete(model: string, req: CompletionRequest): Promise<CompletionResult> {
-    const msg = await this.sdk.messages.create({
-      model,
-      max_tokens: req.maxTokens ?? 2048,
-      temperature: req.temperature ?? 0.3,
-      system: req.system,
-      messages: req.messages
-        .filter((m) => m.role !== "system")
-        .map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
-      tools: req.tools?.map((t) => ({
-        name: t.name,
-        description: t.description,
-        input_schema: t.parameters as Anthropic.Tool.InputSchema,
-      })),
-    });
+    // No timeout here would mean a stalled connection hangs forever — the SDK
+    // has no default. 25s matches the other providers' bound.
+    const msg = await this.sdk.messages.create(
+      {
+        model,
+        max_tokens: req.maxTokens ?? 2048,
+        temperature: req.temperature ?? 0.3,
+        system: req.system,
+        messages: req.messages
+          .filter((m) => m.role !== "system")
+          .map((m) => ({ role: m.role as "user" | "assistant", content: m.content })),
+        tools: req.tools?.map((t) => ({
+          name: t.name,
+          description: t.description,
+          input_schema: t.parameters as Anthropic.Tool.InputSchema,
+        })),
+      },
+      { timeout: 25_000 },
+    );
 
     let text = "";
     const toolCalls: CompletionResult["toolCalls"] = [];

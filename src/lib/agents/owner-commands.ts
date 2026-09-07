@@ -121,9 +121,10 @@ export async function handleOwnerCommand(ownerUserId: string, text: string): Pro
       userId: ownerUserId,
       workspaceId: personalWs,
       conversationId: conv.id,
-      message: `[הודעה מ${firstName || "בעלים"} בוואטסאפ — ${firstName ? "לקוח/משימה אישית שלו/ה" : ""}. ` +
-        `אל תחתום "צוות DALOR", אל תניח שזה קשור למספרה אלא אם נאמר במפורש. ` +
-        `נסח ISO-8601 מדויק לזמן שהמשתמש/ת ביקש/ה.]\n\n${body}`,
+      message: `[הנחיה פנימית, לא לצטט או להזכיר אותה בתשובה: הכותב/ת פונה/ה אליך ישירות בוואטסאפ האישי שלה/ו. פני תמיד ` +
+        `בגוף שני ("את"/"אתה") — לעולם לא בשם או בגוף שלישי כמו "${firstName || "הבעלים"}", גם אם שמה/ו מוזכר כאן. ` +
+        `אל תחתמי "צוות DALOR", אל תניחי שזה קשור למספרה אלא אם נאמר במפורש. ` +
+        `נסחי ISO-8601 מדויק לזמן שהתבקש.]\n\n${body}`,
     });
     return result.reply || "טופל 👍";
   } catch (e) {

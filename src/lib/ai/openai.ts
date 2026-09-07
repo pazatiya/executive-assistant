@@ -26,11 +26,20 @@ export class OpenAIProvider implements LLMProvider {
       }));
     }
 
-    const res = await fetch(`${BASE}/chat/completions`, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${env.openaiApiKey}` },
-      body: JSON.stringify(body),
-    });
+    // No timeout here would mean a stalled connection hangs forever.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 25_000);
+    let res: Response;
+    try {
+      res = await fetch(`${BASE}/chat/completions`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${env.openaiApiKey}` },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
     if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
 
     const data = (await res.json()) as {

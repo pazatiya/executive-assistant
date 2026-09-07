@@ -261,8 +261,16 @@ const get_context: ToolFn = async (ctx, input) => {
       .map((e) => ({ id: e.id, from: e.fromName || e.fromAddress, subject: e.subject, category: e.category, replyRequired: e.replyRequired }));
   }
   if (kind === "messages") {
+    // Not just "new" — a message already auto-acked (e.g. "checking with the
+    // store") is exactly the case where the owner comes back later to send
+    // the real answer. Excluding anything but "new" made every such
+    // follow-up read as "no message found from X".
     out.socialInbox = (
-      await listMessages(ctx.userId, { workspaceId: ctx.workspaceId ?? undefined, statuses: ["new"] })
+      await listMessages(ctx.userId, {
+        workspaceId: ctx.workspaceId ?? undefined,
+        statuses: ["new", "drafted", "waiting_approval", "replied"],
+        limit: 30,
+      })
     ).map((m) => ({
       id: m.id,
       channel: m.channel,
@@ -270,6 +278,7 @@ const get_context: ToolFn = async (ctx, input) => {
       from: m.authorHandle,
       text: m.text,
       classification: m.classification,
+      status: m.status,
     }));
   }
   if (kind === "contacts") {
