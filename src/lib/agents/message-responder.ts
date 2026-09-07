@@ -231,11 +231,13 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
     approvalId = a.id;
   }
 
-  // "talk to a human" → send the ack automatically (in active mode) AND always
-  // raise a high-priority alert so an owner picks the thread up.
-  if (triage.intent === "wants_human") {
+  // Intents where the assistant sends a fixed acknowledgment automatically
+  // (in active mode) but ALWAYS alerts the owners to pick the thread up:
+  // "talk to a human", and anything about clothing / a product / an order.
+  const ACK_AND_ALERT = new Set(["wants_human", "clothing_availability", "clothing_order", "order_status"]);
+  if (ACK_AND_ALERT.has(triage.intent)) {
     let acked = false;
-    if (mode === "active") {
+    if (mode === "active" && autoCount < MAX_CONSECUTIVE_AUTO) {
       const r = await executeAction({
         userId: ownerUserId,
         workspaceId,
@@ -246,15 +248,16 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
       acked = r.ok && r.data?.simulated !== true;
     }
     await updateMessage(ownerUserId, msg.id, {
-      status: "drafted",
+      status: acked ? "replied" : "drafted",
       draftReply: draft,
       priority: "high",
     });
+    const isHuman = triage.intent === "wants_human";
     await notifyOwnersOf(workspaceId, {
       fallbackUserId: ownerUserId,
       kind: "proactive",
-      title: `🙋 ${who} מבקש/ת לדבר עם נציג`,
-      body: `"${msg.text}"\n\nהיכנסו ל-הודעות וענו.`,
+      title: isHuman ? `🙋 ${who} מבקש/ת לדבר עם נציג` : `👕 ${who} — שאלת בגדים/הזמנה`,
+      body: `"${msg.text}"\n\n${isHuman ? "היכנסו ל-הודעות וענו." : "צריך לבדוק מול החנות ולחזור ללקוח."}`,
       href: "/messages",
       priority: "high",
     }).catch(() => {});
