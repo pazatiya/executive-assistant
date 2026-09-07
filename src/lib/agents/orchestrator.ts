@@ -145,9 +145,13 @@ export async function orchestrate(input: OrchestratorInput): Promise<Orchestrato
         error: msg.slice(0, 400),
       });
       const fallback = await mockOrchestrate(ctx, effectiveMessage, trace);
-      const hint = /credit balance|billing|quota|insufficient/i.test(msg)
-        ? "\n\n⚠️ אין יתרת קרדיט בחשבון ה-AI (הועברתי גם דרך ספקים חלופיים). הוסיפי קרדיט או חברי מפתח נוסף ב-Settings › מודל AI."
-        : "\n\n⚠️ ספקי ה-AI לא זמינים כרגע — עברתי למצב לוקאלי.";
+      // a transient Google overload (503 / "high demand") shouldn't read as "no credit"
+      const transient = /50[23]|high demand|overload|unavailable|timeout|rate.?limit|429/i.test(msg);
+      const hint = transient
+        ? "\n\n⚠️ יש עומס רגעי על ה-AI — נסה/י שוב עוד רגע."
+        : /credit balance|billing|quota|insufficient/i.test(msg)
+          ? "\n\n⚠️ אין יתרת קרדיט בחשבון ה-AI. הוסיפי קרדיט או חברי מפתח נוסף ב-Settings › מודל AI."
+          : "\n\n⚠️ ספקי ה-AI לא זמינים כרגע — עברתי למצב לוקאלי, נסה/י שוב.";
       reply = fallback + hint;
     }
   }

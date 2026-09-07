@@ -52,11 +52,17 @@ export interface RouteOverride {
   model?: string | null;
 }
 
+// Providers that returned a hard "no credit / billing" error this process —
+// skip them on later calls so a Google hiccup doesn't waste a dead round-trip.
+const outOfCredit = new Set<Exclude<ProviderName, "mock">>();
+
 /** Ordered preference of real providers to try. First = the user/env default. */
 function providerChain(preferred: ProviderName): Exclude<ProviderName, "mock">[] {
   const all: Exclude<ProviderName, "mock">[] = ["anthropic", "google", "openai"];
   const head = all.filter((p) => p === preferred);
-  return [...head, ...all.filter((p) => p !== preferred)].filter((p) => providers[p].available);
+  return [...head, ...all.filter((p) => p !== preferred)].filter(
+    (p) => providers[p].available && !outOfCredit.has(p),
+  );
 }
 
 export class ModelRouter {
@@ -97,7 +103,21 @@ export class ModelRouter {
         if (errors.length) result.stopReason = `failover_from:${errors.join("|")};${result.stopReason ?? ""}`;
         return result;
       } catch (e) {
-        errors.push(`${p}:${(e instanceof Error ? e.message : String(e)).slice(0, 120)}`);
+        const em = e instanceof Error ? e.message : String(e);
+        if (/credit balance|billing|insufficient|quota exceeded|payment/i.test(em)) outOfCredit.add(p);
+        errors.push(`${p}:${em.slice(0, 120)}`);
+        // a transient overload on the preferred provider — give it one more shot
+        // before falling through to a dead/absent backup.
+        if (i === 0 && /50[23]|high demand|overload|unavailable|ETIMEDOUT|ECONNRESET/i.test(em)) {
+          await new Promise((r) => setTimeout(r, 2500));
+          try {
+            const retry = await providers[p].complete(model, req);
+            retry.stopReason = `retried_after:${em.slice(0, 60)};${retry.stopReason ?? ""}`;
+            return retry;
+          } catch (e2) {
+            errors.push(`${p}(retry):${(e2 instanceof Error ? e2.message : String(e2)).slice(0, 80)}`);
+          }
+        }
       }
     }
     throw new Error(`כל ספקי ה-AI נכשלו — ${errors.join(" · ")}`);
