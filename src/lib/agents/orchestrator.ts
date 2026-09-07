@@ -219,6 +219,7 @@ async function llmOrchestrate(
   const READ_ONLY = new Set(["get_context"]);
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+    console.log(`[orchestrator] iter=${i} requesting completion…`);
     const res = await ModelRouter.complete("orchestration", { system, messages, tools: TOOL_SCHEMAS }, aiOverride);
     trace.provider = res.provider;
     trace.model = res.model;

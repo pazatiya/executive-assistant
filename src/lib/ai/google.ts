@@ -60,20 +60,39 @@ export class GoogleProvider implements LLMProvider {
     const tools = toGeminiTools(req.tools);
     if (tools) body.tools = tools;
 
-    const call = () =>
-      fetch(`${BASE}/models/${model}:generateContent?key=${env.googleApiKey}`, {
+    // No timeout on the network call itself would mean a stalled connection
+    // hangs forever — silently, with no error, no log, no retry. 25s is well
+    // above a normal response but still bounded.
+    const REQUEST_TIMEOUT_MS = 25_000;
+    const call = () => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      return fetch(`${BASE}/models/${model}:generateContent?key=${env.googleApiKey}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
-      });
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timer));
+    };
 
-    // Retry transient overload / rate limit (free tier 503s under load).
-    // 4 attempts with growing back-off: ~0 · 1.5s · 4s · 8s.
-    let res = await call();
-    const backoff = [1500, 4000, 8000];
-    for (let i = 0; (res.status === 503 || res.status === 429) && i < backoff.length; i++) {
-      await new Promise((r) => setTimeout(r, backoff[i]));
-      res = await call();
+    // Retry transient overload / rate limit (free tier 503s under load) and a
+    // timed-out/stalled connection. Up to 4 attempts, growing back-off: 0 · 1.5s · 4s · 8s.
+    const backoff = [0, 1500, 4000, 8000];
+    let res: Response | undefined;
+    let lastErr: unknown;
+    for (let i = 0; i < backoff.length; i++) {
+      if (backoff[i]) await new Promise((r) => setTimeout(r, backoff[i]));
+      try {
+        res = await call();
+        if (res.status !== 503 && res.status !== 429) break;
+      } catch (e) {
+        lastErr = e;
+        res = undefined;
+      }
+    }
+    if (!res) {
+      const timedOut = lastErr instanceof Error && lastErr.name === "AbortError";
+      throw new Error(timedOut ? `Google request timed out after ${REQUEST_TIMEOUT_MS}ms (x${backoff.length} attempts)` : String(lastErr));
     }
 
     if (!res.ok) {
