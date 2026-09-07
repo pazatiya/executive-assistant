@@ -15,9 +15,10 @@ import { listApprovals, decideApproval } from "@/lib/services/approvals";
 import { getOrCreateConversation } from "@/lib/services/conversations";
 import { orchestrate } from "@/lib/agents/orchestrator";
 
-// "אשר" / "אשר 2" / "מאשר" — optional 1-based index into the pending list
-const APPROVE = /^(אשר|מאשר|אשרי|approve|לאשר)\s*(\d{1,2})?\s*$/i;
-const REJECT = /^(דחה|דחי|reject|לדחות|תדחה)\s*(\d{1,2})?\s*$/i;
+// "אשר" / "אשר 2" — optional 1-based index; "אשר הכל" / "אשר את כולם" — all
+const ALL = /(הכל|כולם|את כולם|all)\s*$/i;
+const APPROVE = /^(אשר|מאשר|אשרי|approve|לאשר)\s*(\d{1,2})?\s*(?:הכל|כולם|את כולם|all)?\s*$/i;
+const REJECT = /^(דחה|דחי|reject|לדחות|תדחה)\s*(\d{1,2})?\s*(?:הכל|כולם|את כולם|all)?\s*$/i;
 const STATUS = /^(סטטוס|status|מה קורה\??|מה יש\??|pending|ממתין|אישורים)\s*$/i;
 
 async function dalorWorkspaceId(): Promise<string | null> {
@@ -45,25 +46,37 @@ export async function handleOwnerCommand(ownerUserId: string, text: string): Pro
     return `🔴 ממתין לאישור (${pending.length}):\n${listPendingText(pending)}${tail}`;
   }
 
-  // ── approve / reject [n] ───────────────────────────────────────
+  // ── approve / reject  [n] | "הכל" ──────────────────────────────
   const ap = APPROVE.exec(body);
   const rj = REJECT.exec(body);
   if (ap || rj) {
-    const pending = await listApprovals(ownerUserId, { statuses: ["pending"], limit: 10, ...scope });
-    if (!pending.length) return "אין כרגע מה לאשר ✅";
+    const decision = ap ? ("approve" as const) : ("reject" as const);
+    const verb = ap ? "אושר" : "נדחה";
+    const pending = await listApprovals(ownerUserId, { statuses: ["pending"], limit: 25, ...scope });
+    if (!pending.length) return ap ? "אין כרגע מה לאשר ✅" : "אין כרגע מה לדחות ✅";
+    const owner = await db.query.users.findFirst({ where: eq(users.id, ownerUserId) });
+    const decidedBy = owner?.fullName ?? "בעלים";
     const nStr = (ap ?? rj)![2];
+
+    // "אשר הכל" / "דחה את כולם"
+    if (!nStr && ALL.test(body)) {
+      let done = 0;
+      for (const a of pending) {
+        const r = await decideApproval(ownerUserId, a.id, decision, { decidedBy });
+        if (r.ok) done++;
+      }
+      return `${ap ? "✅" : "❌"} ${done}/${pending.length} ${verb} (הכל).`;
+    }
+
     if (!nStr && pending.length > 1) {
-      return `יש ${pending.length} אישורים ממתינים — איזה?\n${listPendingText(pending)}\n\nהשב "אשר 1", "אשר 2"…`;
+      return `יש ${pending.length} אישורים ממתינים — איזה?\n${listPendingText(pending)}\n\nהשב "${ap ? "אשר" : "דחה"} 1" / "${ap ? "אשר" : "דחה"} 2" — או "${ap ? "אשר" : "דחה"} הכל".`;
     }
     const idx = nStr ? Number(nStr) - 1 : 0;
     const target = pending[idx];
     if (!target) return `אין אישור מספר ${nStr}. שלח "סטטוס" לרשימה מעודכנת.`;
-    const owner = await db.query.users.findFirst({ where: eq(users.id, ownerUserId) });
-    const r = await decideApproval(ownerUserId, target.id, ap ? "approve" : "reject", {
-      decidedBy: owner?.fullName ?? "בעלים",
-    });
+    const r = await decideApproval(ownerUserId, target.id, decision, { decidedBy });
     if (!r.ok) return r.error === "not_found" ? "האישור לא נמצא." : `כבר טופל (${r.error}).`;
-    return ap ? `✅ אושר: ${target.title}` : `❌ נדחה: ${target.title}`;
+    return `${ap ? "✅" : "❌"} ${verb}: ${target.title}`;
   }
 
   // ── everything else → the orchestrator, as this owner ───────────
