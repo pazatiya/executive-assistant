@@ -44,6 +44,7 @@ Oracle — נזנח (חסימת הרשמה חוזרת).
 | `VAPID_PUBLIC` / `VAPID_PRIVATE` | מפתחות Web Push (`npx web-push generate-vapid-keys`) |
 | `WAHA_API_KEY` | אותו ערך כמו ב-`dalor-waha` |
 | `WAHA_WEBHOOK_SECRET` | מחרוזת אקראית חזקה |
+| `OWNER_WHATSAPP` | `yair@dalor.co.il:972507983306,pazyairat@gmail.com:972547734708` — מפעיל פקודות בעלים + התראות בוואטסאפ |
 
 `AUTH_SESSION_SECRET`, `ENCRYPTION_KEY`, `CRON_SECRET` — Render מייצר לבד (`generateValue`).
 `WAHA_BASE_URL` — מתמלא אוטומטית מ-`dalor-waha` (רשת פרטית).
