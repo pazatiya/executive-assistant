@@ -48,6 +48,8 @@ export const ACTION_CATALOG = {
   financial_commitment: "red",
   sign_agreement: "red",
   delete_significant_data: "red",
+  delete_reminders: "red",
+  cancel_reminders: "red",
   delete_account: "red",
   change_permissions: "red",
   send_sensitive_info: "red",

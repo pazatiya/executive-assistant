@@ -5,6 +5,7 @@ import { nowIso } from "@/lib/utils";
 import { getConnector } from "@/lib/integrations/registry";
 import { createBooking } from "@/lib/integrations/dalor-barber";
 import { sendWhatsApp } from "@/lib/integrations/whatsapp-send";
+import { updateReminder } from "@/lib/services/reminders";
 
 export interface ExecuteInput {
   userId: string;
@@ -159,6 +160,30 @@ export async function executeAction(input: ExecuteInput): Promise<ExecuteResult>
           .set({ status: "completed", completedAt: nowIso(), updatedAt: nowIso() })
           .where(eq(tasks.id, payload.taskId as string));
         return { ok: true, actionType, detail: "המשימה סומנה כהושלמה.", data: {} };
+      }
+
+      // "Delete" a reminder = cancel it, not a hard row delete — same reasoning
+      // as tasks (complete_task above): keep the audit trail in /activity.
+      case "delete_reminders":
+      case "cancel_reminders": {
+        const ids = Array.isArray(payload.reminderIds)
+          ? (payload.reminderIds as string[])
+          : payload.reminderId
+            ? [payload.reminderId as string]
+            : [];
+        if (!ids.length) return { ok: false, actionType, detail: "", error: "חסר reminderIds/reminderId" };
+        let cancelled = 0;
+        for (const id of ids) {
+          const r = await updateReminder(input.userId, id, { status: "cancelled" });
+          if (r) cancelled++;
+        }
+        if (!cancelled) return { ok: false, actionType, detail: "", error: "לא נמצאה אף תזכורת מהרשימה לביטול" };
+        return {
+          ok: true,
+          actionType,
+          detail: `${cancelled}/${ids.length} תזכורות בוטלו.`,
+          data: { cancelled, requested: ids.length },
+        };
       }
 
       case "browser_action": {
