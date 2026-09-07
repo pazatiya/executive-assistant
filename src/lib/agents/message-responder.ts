@@ -15,6 +15,7 @@ import type { MessageTriage } from "./message-triage";
 
 /** Routine intents the assistant may answer automatically — but only in `active` mode. */
 const AUTO_SEND_INTENTS = new Set([
+  "greeting",
   "opening_hours",
   "location",
   "barber_pricelist",
@@ -24,9 +25,19 @@ const AUTO_SEND_INTENTS = new Set([
 
 const INTRO = "כאן ג'ימי, העוזר הדיגיטלי של יאיר 🙂";
 const HOLDING = "קיבלתי 🙏 בודק ומחזיר לך תשובה עוד מעט.";
+const WELCOME =
+  "היי! 🙂 כאן ג'ימי מ-DALOR — מספרה וחנות בגדים לגבר.\n" +
+  "אפשר לשאול על שעות פתיחה, כתובת, מחירים, לתאם תור, או לשאול על בגדים.\n" +
+  'רוצה לדבר עם יאיר או פז? פשוט כתוב "נציג".';
+// customer wants a human — we ack and flag it, never keep chatting
+const HANDOFF = "בסדר גמור — מעביר אותך ליאיר/פז, הם יחזרו אלייך ממש בקרוב 🙂";
+// clothing / product / order questions — iron rule, always check with the store
+const STORE_HOLDING = "בודק מול החנות מה יש ומחזיר לך תשובה בהקדם 👕";
 
 const AUTO_REPLY_WINDOW_MS = 6 * 3600_000;
-const MAX_CONSECUTIVE_AUTO = 2;
+// a normal customer asks a few things in a row (hours, then address, then price) —
+// allow that, but stop auto-answering if it turns into a long unattended thread.
+const MAX_CONSECUTIVE_AUTO = 5;
 
 export interface RespondInput {
   message: typeof messages.$inferSelect;
@@ -91,6 +102,25 @@ async function composeDraft(
 ): Promise<{ text: string; grounded: boolean; bookingApprovalPayload?: Record<string, unknown> }> {
   const prefix = withIntro ? INTRO + "\n" : "";
 
+  // ── bare greeting → a warm welcome ───────────────────────────────
+  if (triage.intent === "greeting") {
+    return { text: withIntro ? WELCOME : "היי! 🙂 במה אפשר לעזור? (שעות, כתובת, מחירים, תור, בגדים)", grounded: true };
+  }
+
+  // ── wants a human → ack + hand off ──────────────────────────────
+  if (triage.intent === "wants_human") {
+    return { text: prefix + HANDOFF, grounded: true };
+  }
+
+  // ── clothing / product / order → iron rule, check with the store ─
+  if (
+    triage.intent === "clothing_availability" ||
+    triage.intent === "clothing_order" ||
+    triage.intent === "order_status"
+  ) {
+    return { text: prefix + STORE_HOLDING, grounded: true };
+  }
+
   // ── appointment intents: use live availability ────────────────────
   if (triage.intent === "appointment_availability" || triage.intent === "appointment_confirm") {
     const date = parseAppointmentDate(msg.text);
@@ -134,11 +164,6 @@ async function composeDraft(
         : prefix + `${heDate(date)} מלא. רוצה שאבדוק יום אחר?`,
       grounded: true,
     };
-  }
-
-  // ── clothing: iron rule — never "we don't have it" ────────────────
-  if (triage.intent === "clothing_availability") {
-    return { text: prefix + "בודק מול יאיר מה יש במלאי וחוזר אלייך ממש עוד מעט 👕", grounded: true };
   }
 
   // ── routine facts (hours / location / pricelist) via LLM ──────────
@@ -204,6 +229,36 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
       proposedBy: "social",
     });
     approvalId = a.id;
+  }
+
+  // "talk to a human" → send the ack automatically (in active mode) AND always
+  // raise a high-priority alert so an owner picks the thread up.
+  if (triage.intent === "wants_human") {
+    let acked = false;
+    if (mode === "active") {
+      const r = await executeAction({
+        userId: ownerUserId,
+        workspaceId,
+        actionType: "reply_message",
+        payload: { messageId: msg.id, to: msg.authorHandle, text: draft, channel: msg.channel },
+        targetSystem: msg.channel,
+      });
+      acked = r.ok && r.data?.simulated !== true;
+    }
+    await updateMessage(ownerUserId, msg.id, {
+      status: "drafted",
+      draftReply: draft,
+      priority: "high",
+    });
+    await notifyOwnersOf(workspaceId, {
+      fallbackUserId: ownerUserId,
+      kind: "proactive",
+      title: `🙋 ${who} מבקש/ת לדבר עם נציג`,
+      body: `"${msg.text}"\n\nהיכנסו ל-הודעות וענו.`,
+      href: "/messages",
+      priority: "high",
+    }).catch(() => {});
+    return { action: acked ? "auto_replied" : "drafted", detail: draft };
   }
 
   const canAutoSend =

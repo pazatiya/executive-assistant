@@ -17,6 +17,12 @@ export interface WhatsAppTarget {
 }
 
 export async function resolveWhatsAppTarget(): Promise<WhatsAppTarget | null> {
+  // the business workspace is always the env-configured slug — an integration
+  // row may predate the two-owner model and carry no workspace of its own.
+  const ws = await db.query.workspaces.findFirst({
+    where: eq(workspaces.slug, env.whatsappWorkspaceSlug),
+  });
+
   const connected = await db.query.integrations.findFirst({
     where: and(eq(integrations.provider, "whatsapp"), eq(integrations.status, "connected")),
   });
@@ -24,16 +30,13 @@ export async function resolveWhatsAppTarget(): Promise<WhatsAppTarget | null> {
     const meta = (connected.metadata ?? {}) as { targetWorkspaceId?: string };
     return {
       userId: connected.userId,
-      workspaceId: meta.targetWorkspaceId ?? connected.workspaceId ?? null,
+      workspaceId: meta.targetWorkspaceId ?? connected.workspaceId ?? ws?.id ?? null,
       integrationId: connected.id,
     };
   }
 
   const owner = await db.query.users.findFirst({ where: eq(users.email, env.whatsappOwnerEmail) });
   if (!owner) return null;
-  const ws = await db.query.workspaces.findFirst({
-    where: eq(workspaces.slug, env.whatsappWorkspaceSlug),
-  });
   const row = await db.query.integrations.findFirst({
     where: and(
       eq(integrations.userId, owner.id),

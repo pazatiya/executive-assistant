@@ -73,6 +73,7 @@ export interface ClassifyInput {
 
 /** Customer-message intents the assistant may answer on its own — closed list. */
 export const AUTO_REPLY_INTENTS = new Set([
+  "greeting",
   "opening_hours",
   "location",
   "barber_pricelist",

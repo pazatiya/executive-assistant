@@ -19,13 +19,16 @@ export type MessageClassification =
 
 export type IntentCategory =
   // ── routine, answerable on our own ──────────────────────────
+  | "greeting" // bare "היי" / "שלום" with no question yet
   | "opening_hours"
   | "location"
   | "barber_pricelist"
   | "appointment_availability"
   | "appointment_confirm"
   // ── always a person decides ─────────────────────────────────
+  | "wants_human" // asked to talk to a real person / representative
   | "clothing_availability" // IRON RULE: catalog is not stock — never say "we don't have it"
+  | "clothing_order" // wants to buy / order clothing or shoes
   | "price_or_discount"
   | "appointment_change" // reschedule / cancel an existing booking
   | "order_status"
@@ -48,16 +51,19 @@ const HE_SYSTEM = `אתה מסווג הודעה נכנסת מלקוח לעסק D
  "classification": "lead"|"question"|"complaint"|"spam"|"praise"|"needs_human"|"other",
  "sentiment": "positive"|"neutral"|"negative",
  "priority": "low"|"normal"|"high"|"urgent",
- "intent": "opening_hours"|"location"|"barber_pricelist"|"appointment_availability"|"appointment_confirm"|"clothing_availability"|"price_or_discount"|"appointment_change"|"order_status"|"complaint"|"other",
+ "intent": "greeting"|"opening_hours"|"location"|"barber_pricelist"|"appointment_availability"|"appointment_confirm"|"wants_human"|"clothing_availability"|"clothing_order"|"price_or_discount"|"appointment_change"|"order_status"|"complaint"|"other",
  "summary": "משפט אחד בעברית"
 }
 כללי intent:
+- "greeting": רק ברכה בלי שאלה — "היי" / "שלום" / "בוקר טוב".
 - "opening_hours": שואל מתי פתוח / שעות.
 - "location": שואל כתובת / איפה / חניה / איך מגיעים.
 - "barber_pricelist": שואל כמה עולה תספורת / זקן / החלקה — מחירון מספרה קבוע בלבד.
 - "appointment_availability": רוצה לדעת אם יש תור פנוי / לתאם תור חדש.
 - "appointment_confirm": מאשר תור שכבר קיים / שואל מתי התור שלו.
-- "clothing_availability": שואל אם יש פריט לבוש / מידה / צבע / מלאי בגדים. חשוב: תמיד intent הזה גם אם נראה פשוט.
+- "wants_human": מבקש לדבר עם נציג / בן אדם / מישהו אמיתי.
+- "clothing_availability": שואל אם יש פריט לבוש / מידה / צבע / מלאי בגדים.
+- "clothing_order": רוצה לקנות / להזמין בגד או נעליים ("אני רוצה להזמין", "יש לכם נעלי אסיקס", "רוצה חולצת פולו").
 - "price_or_discount": שואל מחיר של בגד, הנחה, מבצע, מיקוח, קופון.
 - "appointment_change": רוצה לבטל / להזיז תור קיים.
 - "order_status": שואל על הזמנה שביצע / משלוח.
@@ -65,6 +71,9 @@ const HE_SYSTEM = `אתה מסווג הודעה נכנסת מלקוח לעסק D
 - "other": כל השאר.`;
 
 const KW = {
+  human: /נציג|לדבר עם (מישהו|בן ?אדם|בנאדם|אדם|איש)|בן ?אדם אמיתי|אדם אמיתי|human|representative|real person|speak to (someone|a person|an agent)/i,
+  greeting: /^(היי+|הי|שלום|אהלן|הייי|בוקר טוב|צהריים טובים|ערב טוב|מה נשמע|מה קורה|hey|hi|hello|שבת שלום)[\s!.]*$/i,
+  wantsOrder: /אני רוצה (להזמין|לקנות|לרכוש)|רוצה להזמין|לבצע הזמנה|יש לכם.*(נעל|נעלי|אסיקס|asics|פומה|puma|נייק|nike|אדידס|adidas|פולו|polo|חולצ|מכנס|ג'ינס|jeans)|מחפש (חולצ|מכנס|נעל|בגד)/i,
   hours: /שעות|מתי פתוח|פתוחים|עד מתי|באיזה שעות|open|hours/i,
   location: /כתובת|איפה אתם|מיקום|חניה|איך מגיעים|ווייז|waze|address|location/i,
   barberPrice: /כמה עולה.*(תספורת|תור|זקן|החלק)|מחיר.*(תספורת|זקן)|תספורת.*כמה/i,
@@ -83,9 +92,18 @@ function heuristicTriage(text: string): MessageTriage {
   let intent: IntentCategory = "other";
   let classification: MessageClassification = "question";
 
-  if (KW.complaint.test(t)) {
+  if (KW.human.test(t)) {
+    intent = "wants_human";
+    classification = "needs_human";
+  } else if (KW.greeting.test(text.trim())) {
+    intent = "greeting";
+    classification = "other";
+  } else if (KW.complaint.test(t)) {
     intent = "complaint";
     classification = "complaint";
+  } else if (KW.wantsOrder.test(t)) {
+    intent = "clothing_order";
+    classification = "lead";
   } else if (KW.clothing.test(t)) {
     intent = "clothing_availability";
     classification = "lead";
@@ -108,7 +126,11 @@ function heuristicTriage(text: string): MessageTriage {
   if (KW.praise.test(t)) classification = "praise";
 
   const priority: MessageTriage["priority"] =
-    classification === "complaint" ? "urgent" : classification === "lead" ? "high" : "normal";
+    classification === "complaint"
+      ? "urgent"
+      : classification === "needs_human" || classification === "lead"
+        ? "high"
+        : "normal";
 
   return {
     classification,
