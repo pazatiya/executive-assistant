@@ -42,6 +42,7 @@ interface MetaWebhook {
   entry?: {
     changes?: {
       value?: {
+        metadata?: { display_phone_number?: string; phone_number_id?: string };
         contacts?: { profile?: { name?: string }; wa_id?: string }[];
         messages?: {
           id?: string;
@@ -66,6 +67,10 @@ export function parseMetaInbound(raw: unknown): InboundMessage | null {
   for (const entry of evt.entry ?? []) {
     for (const change of entry.changes ?? []) {
       const value = change.value;
+      // only act on messages to OUR business number — the portfolio may hold
+      // other numbers (e.g. the booking bot) on the same webhook.
+      const pnid = value?.metadata?.phone_number_id;
+      if (env.metaWaPhoneNumberId && pnid && pnid !== env.metaWaPhoneNumberId) continue;
       const m = value?.messages?.[0];
       if (!m || !m.from) continue;
       const text =
