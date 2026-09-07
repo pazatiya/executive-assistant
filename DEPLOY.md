@@ -17,7 +17,7 @@ Oracle — נזנח (חסימת הרשמה חוזרת). WAHA — נזנח (Meta 
 
 - חשבון **Render** (render.com) — של פז, workspace קיים
 - חשבון **Turso** — קיים, org `pazatiya`, DB `dalor-mazkira` כבר נוצר
-- **הטלפון של יאיר** (972507983306) לסריקת QR — רק בשלב האחרון
+- **מספר וואטסאפ פנוי** לבוט (לא רשום כרגע בוואטסאפ הרגיל)
 - כל המפתחות — בקובץ הזמני של הסשן (`scratchpad/render-env.md`)
 
 ---
@@ -43,7 +43,7 @@ Oracle — נזנח (חסימת הרשמה חוזרת). WAHA — נזנח (Meta 
 | `DALOR_BARBER_ADMIN_KEY` | `2810` |
 | `VAPID_PUBLIC` / `VAPID_PRIVATE` | מפתחות Web Push (`npx web-push generate-vapid-keys`) |
 | `OWNER_WHATSAPP` | `yair@dalor.co.il:972507983306,pazyairat@gmail.com:972547734708` — פקודות בעלים + התראות בוואטסאפ |
-| `META_WA_TOKEN` · `META_WA_PHONE_NUMBER_ID` · `META_WA_VERIFY_TOKEN` · `META_APP_SECRET` | ראה §4b |
+| `META_WA_TOKEN` · `META_WA_PHONE_NUMBER_ID` · `META_WA_VERIFY_TOKEN` · `META_APP_SECRET` | ראה §4 |
 
 `AUTH_SESSION_SECRET`, `ENCRYPTION_KEY`, `CRON_SECRET` — Render מייצר לבד (`generateValue`).
 
@@ -81,8 +81,7 @@ Oracle — נזנח (חסימת הרשמה חוזרת). WAHA — נזנח (Meta 
    - Subscribe: שדה **messages**.
 8. **Render → executive-assistant → Environment**: `META_WA_TOKEN`, `META_WA_PHONE_NUMBER_ID`,
    `META_WA_VERIFY_TOKEN`, `META_APP_SECRET` → Save (מפעיל דפלוי).
-9. בדיקה: שלח וואטסאפ למספר → ההודעה נכנסת ל-**הודעות** באפליקציה.
-10. בדיקה: שלח וואטסאפ למספר → ההודעה נכנסת ל-**הודעות** באפליקציה. עלות: **$0**.
+9. בדיקה: שלח וואטסאפ למספר → ההודעה נכנסת ל-**הודעות** באפליקציה. עלות: **$0**.
 
 > אימות עסקי (Business Verification) ב-Security Center פותח מכסות גבוהות + וי ירוק —
 > רץ ברקע, לא חוסם התחלה. עד אז המספר יכול לענות ללקוחות שכתבו אליו, במגבלת נפח יומית.
