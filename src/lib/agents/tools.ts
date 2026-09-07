@@ -214,6 +214,29 @@ const draft_message_reply: ToolFn = async (ctx, input) => {
   return { ok: true, summary: `תגובה מוכנה וממתינה לאישור`, approvalId: a.id, agent: "social" };
 };
 
+/**
+ * Sends a customer reply RIGHT NOW, no approval step.
+ * Only for when the owner (Paz/Yair) dictated the exact wording themselves —
+ * the owner's own message *is* the approval. If the model is composing the
+ * wording on its own, it must use draft_message_reply instead.
+ */
+const send_message_now: ToolFn = async (ctx, input) => {
+  const messageId = String(input.messageId ?? "");
+  const text = String(input.text ?? "");
+  if (!text.trim()) return { ok: false, summary: "חסר טקסט לשליחה" };
+  const mRow = messageId ? await db.query.messages.findFirst({ where: eq(messages.id, messageId) }) : null;
+  const m = mRow && (await canAccessRow(ctx.userId, mRow)) ? mRow : null;
+  if (!m) return { ok: false, summary: "לא מצאתי את ההודעה לענות עליה — בדוק messageId מ-get_context" };
+  if (m.channel !== "whatsapp") {
+    return { ok: false, summary: `ערוץ ${m.channel} לא נתמך לשליחה מיידית — השתמש ב-draft_message_reply` };
+  }
+  const { sendWhatsApp } = await import("@/lib/integrations/whatsapp-send");
+  const r = await sendWhatsApp(m.authorHandle, text);
+  if (!r.ok) return { ok: false, summary: `השליחה נכשלה: ${r.error ?? "שגיאה לא ידועה"}` };
+  await db.update(messages).set({ status: "replied", draftReply: text }).where(eq(messages.id, messageId));
+  return { ok: true, summary: `נשלח מיד ל-${m.authorName || m.authorHandle}`, agent: "social" };
+};
+
 const get_context: ToolFn = async (ctx, input) => {
   const kind = String(input.kind ?? "overview");
   const out: Record<string, unknown> = {};
@@ -369,6 +392,7 @@ export const TOOLS: Record<string, ToolFn> = {
   request_approval,
   draft_email_reply,
   draft_message_reply,
+  send_message_now,
   get_context,
   business_advice,
   check_availability,
@@ -513,7 +537,16 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
   },
   {
     name: "draft_message_reply",
-    description: "מכין תגובה להודעה/תגובה ברשת חברתית (messageId מ-get_context kind=messages) ומעלה לאישור. תלונות תמיד לאישור.",
+    description: "כשאתה עצמך מנסח את התוכן של תגובה ללקוח (messageId מ-get_context kind=messages) — מכין טיוטה ומעלה לאישור הבעלים, לא נשלח מיד. תלונות תמיד לאישור. אם הבעלים כבר נתנו לך את הנוסח המדויק לשליחה — השתמש ב-send_message_now במקום.",
+    parameters: {
+      type: "object",
+      properties: { messageId: { type: "string" }, text: { type: "string" } },
+      required: ["messageId", "text"],
+    },
+  },
+  {
+    name: "send_message_now",
+    description: "שולח תשובה ללקוח בוואטסאפ מיד, בלי אישור נוסף (messageId מ-get_context kind=messages). השתמש רק כשהבעלים (פז/יאיר) כתבו לך את הנוסח המדויק מילה במילה לשליחה — ההודעה שלהם היא כבר האישור. אם אתה מנסח את התוכן בעצמך — אסור להשתמש בזה, חובה draft_message_reply.",
     parameters: {
       type: "object",
       properties: { messageId: { type: "string" }, text: { type: "string" } },

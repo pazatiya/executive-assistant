@@ -98,7 +98,11 @@ export function parseMetaInbound(raw: unknown): InboundMessage | null {
 }
 
 async function postMessage(payload: Record<string, unknown>): Promise<{ ok: boolean; id?: string; error?: string }> {
-  if (!metaWaConfigured()) return { ok: false, error: "Meta WhatsApp לא מוגדר" };
+  const to = payload.to as string | undefined;
+  if (!metaWaConfigured()) {
+    console.error(`[meta-wa] not configured — dropped message to ${to}`);
+    return { ok: false, error: "Meta WhatsApp לא מוגדר" };
+  }
   try {
     const res = await fetch(`${graphBase()}/${env.metaWaPhoneNumberId}/messages`, {
       method: "POST",
@@ -108,10 +112,17 @@ async function postMessage(payload: Record<string, unknown>): Promise<{ ok: bool
     const body = (await res.json().catch(() => null)) as
       | { messages?: { id?: string }[]; error?: { message?: string } }
       | null;
-    if (!res.ok) return { ok: false, error: body?.error?.message ?? `HTTP ${res.status}` };
+    if (!res.ok) {
+      const error = body?.error?.message ?? `HTTP ${res.status}`;
+      console.error(`[meta-wa] send to ${to} FAILED (${payload.type}): ${error}`);
+      return { ok: false, error };
+    }
+    console.log(`[meta-wa] send to ${to} ok (${payload.type}), id=${body?.messages?.[0]?.id}`);
     return { ok: true, id: body?.messages?.[0]?.id };
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+    const error = e instanceof Error ? e.message : String(e);
+    console.error(`[meta-wa] send to ${to} threw: ${error}`);
+    return { ok: false, error };
   }
 }
 

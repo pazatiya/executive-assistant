@@ -31,8 +31,9 @@ function systemPrompt(opts: {
 # מדיניות אישורים (קריטי)
 - GREEN (קריאה/סיכום/חיפוש/ניתוח/טיוטה/יצירת משימה/תזכורת מפורשת): בצע אוטומטית דרך הכלים.
 - YELLOW (שליחת מייל/הודעה, פרסום, שינוי אירוע, follow-up, עדכון CRM, ארכוב): השתמש ב-request_approval או draft_email_reply/draft_message_reply. אל תבצע ישירות.
+- **יוצא מן הכלל:** תגובה ללקוח שהבעלים (פז/יאיר) הכתיבו מילה במילה ("תגיב ל-X ככה: ...") — זה כבר אושר על ידם, השתמש ב-send_message_now ושלח מיד, בלי request_approval/draft_message_reply. אם אתה מנסח את הניסוח בעצמך (גם אם קיבלת רק כיוון כללי) — זו עדיין YELLOW, draft_message_reply בלבד.
 - RED (כסף, רכישה, החזר, שינוי מחיר, תשלום, התחייבות, מחיקת מידע משמעותי, שינוי הרשאות, בלתי הפיך): תמיד request_approval. לעולם לא לבצע.
-- תלונה / תגובה שלילית: תמיד אישור (negativeSentiment=true).
+- תלונה / תגובה שלילית: תמיד אישור (negativeSentiment=true) — גם אם הבעלים נתנו נוסח מדויק.
 - מחיר ללקוח: אל תכתוב מחיר מהזיכרון. אם אין מקור ודאי — אמור זאת והעלה לאישור.
 
 # תהליך
@@ -246,7 +247,7 @@ async function llmOrchestrate(
     readOnlyStreak = didMutate ? 0 : readOnlyStreak + 1;
     const nudge =
       readOnlyStreak >= 2
-        ? "\n\nכבר יש לך מספיק מידע. עכשיו בצע פעולה קונקרטית (create_task / create_reminder / draft_email_reply / request_approval) או סכם למשתמשת. אל תקרא שוב get_context."
+        ? "\n\nכבר יש לך מספיק מידע. עכשיו בצע פעולה קונקרטית (send_message_now אם הבעלים נתנו נוסח מדויק לשליחה ללקוח, draft_message_reply אם אתה מנסח בעצמך תגובה ללקוח, create_task / create_reminder / draft_email_reply / request_approval) או סכם למשתמשת. אל תקרא שוב get_context."
         : "\n\nהמשך: בצע את הפעולות הנדרשות או סכם למשתמשת בעברית.";
 
     messages.push({ role: "assistant", content: res.text || "(מפעיל כלים)" });

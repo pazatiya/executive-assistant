@@ -33,15 +33,26 @@ function alreadySeen(id: string): boolean {
 
 export async function ingestWhatsAppMessage(msg: InboundMessage | null): Promise<IngestResult> {
   if (!msg) return { ok: true, handled: "ignored" };
+  console.log(`[inbound] from=${msg.fromNumber} group=${msg.isGroup} text="${(msg.text ?? "").slice(0, 120)}"`);
   if (msg.isGroup || !msg.text || msg.fromMe) return { ok: true, handled: "skipped" };
-  if (alreadySeen(msg.externalId)) return { ok: true, handled: "duplicate" };
+  if (alreadySeen(msg.externalId)) {
+    console.log(`[inbound] duplicate externalId=${msg.externalId} — dropped`);
+    return { ok: true, handled: "duplicate" };
+  }
 
   // A message from an owner's own number is a command, not a customer.
   if (isOwnerNumber(msg.fromNumber)) {
     const ownerId = await ownerUserIdForNumber(msg.fromNumber);
     if (ownerId) {
+      console.log(`[owner_command] from=${msg.fromNumber} text="${msg.text.slice(0, 120)}"`);
       const reply = await handleOwnerCommand(ownerId, msg.text);
-      await sendWhatsApp(msg.fromNumber, reply).catch(() => {});
+      console.log(`[owner_command] reply ready (${reply.length} chars) — sending back to ${msg.fromNumber}`);
+      const sent = await sendWhatsApp(msg.fromNumber, reply).catch((e) => ({ ok: false, error: e instanceof Error ? e.message : String(e) }));
+      if (!sent.ok) {
+        console.error(`[owner_command] send-back FAILED to ${msg.fromNumber}: ${sent.error}`);
+      } else {
+        console.log(`[owner_command] send-back ok, via=${"via" in sent ? sent.via : "?"}`);
+      }
       return { ok: true, handled: "owner_command" };
     }
   }
@@ -89,6 +100,7 @@ export async function ingestWhatsAppMessage(msg: InboundMessage | null): Promise
   } catch (e) {
     console.error("respondToMessage failed", e);
   }
+  console.log(`[inbound] intent=${triage.intent} outcome=${responded?.action ?? "silent"} messageId=${created.id}`);
 
   await runAutomations(target.userId, "message.received", {
     workspaceId: target.workspaceId,
