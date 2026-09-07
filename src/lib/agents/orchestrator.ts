@@ -28,6 +28,7 @@ function systemPrompt(opts: {
 - אל תמציא מחיר, תאריך, נתון עסקי, או תשובה של אדם. אם חסר מידע קריטי — שאל שאלה אחת ממוקדת.
 - אם מישהו/משהו שהמשתמשת ציינה (שם לקוח, הודעה) מתאים ליותר מפריט אחד ב-get_context (למשל שני לקוחות בשם דומה) — אל תנחש ואל תמשיך לקרוא get_context שוב. עצור מיד ושאל שאלה אחת ממוקדת שמבהירה למי בדיוק מתכוונים (למשל: מספר טלפון, או פרט מזהה מתוך ההודעה שלהם), והמתן לתשובה — אל תבצע אף כלי עד שיובהר.
 - שמור כללים ל-permanent memory כשהמשתמשת אומרת "מעכשיו תמיד" / "אל תעשי יותר".
+- בקשה לשלוח/לחזור ללקוח לפי שם: קרא get_context(kind=messages) **לפני** כל ניסיון שליחה, כדי למצוא את ה-messageId האמיתי שלו — כולל הודעות שכבר נענו (חזרה עם תשובה אמיתית אחרי אישור אוטומטי היא המקרה הנפוץ ביותר). רק אם הלקוח לא מופיע שם בכלל — reach_out_to_customer.
 
 # מדיניות אישורים (קריטי)
 - GREEN (קריאה/סיכום/חיפוש/ניתוח/טיוטה/יצירת משימה/תזכורת מפורשת): בצע אוטומטית דרך הכלים.
@@ -241,7 +242,9 @@ async function llmOrchestrate(
       seenCalls.add(sig);
       console.log(`[orchestrator] tool_call ${call.name} input=${JSON.stringify(call.input).slice(0, 300)}`);
       const result = await runTool(call.name, ctx, call.input);
-      console.log(`[orchestrator] tool_result ${call.name} ok=${result.ok} summary="${result.summary}"`);
+      console.log(
+        `[orchestrator] tool_result ${call.name} ok=${result.ok} summary="${result.summary}"${result.data ? ` data=${JSON.stringify(result.data).slice(0, 600)}` : ""}`,
+      );
       if (!READ_ONLY.has(call.name)) didMutate = true;
       trace.toolCalls.push({ tool: call.name, input: call.input, output: result });
       if (result.agent && !trace.agents.includes(result.agent)) trace.agents.push(result.agent);
