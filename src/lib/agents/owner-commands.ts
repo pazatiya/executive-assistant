@@ -7,9 +7,9 @@
  * reply is sent back over WhatsApp. The app stays the primary control room;
  * this is the on-the-go layer.
  */
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { users, workspaces } from "@/lib/db/schema";
+import { conversations, users, workspaces } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { listApprovals, decideApproval } from "@/lib/services/approvals";
 import { getOrCreateConversation } from "@/lib/services/conversations";
@@ -107,7 +107,15 @@ export async function handleOwnerCommand(ownerUserId: string, text: string): Pro
   // reach the DALOR workspace on their own.
   const personalWs = (await personalWorkspaceId(ownerUserId)) ?? wsId;
   if (!personalWs) return "לא מצאתי סביבה מתאימה. נסה מהאפליקציה.";
-  const conv = await getOrCreateConversation(ownerUserId, null, personalWs);
+  // Reuse the owner's most recent conversation in this workspace instead of
+  // starting a fresh one on every WhatsApp message — otherwise a follow-up
+  // like "972501234567" (answering "which Avi?") arrives with zero history
+  // and reads as a random number out of nowhere.
+  const existing = await db.query.conversations.findFirst({
+    where: and(eq(conversations.userId, ownerUserId), eq(conversations.workspaceId, personalWs)),
+    orderBy: desc(conversations.lastMessageAt),
+  });
+  const conv = await getOrCreateConversation(ownerUserId, existing?.id ?? null, personalWs);
   try {
     const result = await orchestrate({
       userId: ownerUserId,
