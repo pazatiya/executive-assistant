@@ -88,6 +88,32 @@ curl -s "https://dalor-waha.onrender.com/api/default/auth/qr?format=image" \
 
 ה-webhook כבר מוטמע ב-session, אבל אפשר גם לוודא באפליקציה → **אינטגרציות → WhatsApp**.
 
+## 4b. מעבר לוואטסאפ רשמי (Meta Cloud API) — היעד
+
+רשמי = אפס סיכון חסימה, בחינם לשיחות שלקוח יזם, וכשזה עובד **מכבים את `dalor-waha`
+וחוסכים את ה-$7**. הקוד כבר תומך: אם `META_WA_TOKEN` + `META_WA_PHONE_NUMBER_ID`
+מוגדרים — Meta גובר על WAHA אוטומטית.
+
+1. **מספר** — צריך מספר שאינו רשום כרגע בוואטסאפ הרגיל. אם הוא רשום: וואטסאפ →
+   הגדרות → חשבון → מחק חשבון, ואז הוא פנוי ל-API.
+2. **Meta Business** — business.facebook.com → Business Portfolio.
+3. **אפליקציה** — developers.facebook.com → Create App → סוג **Business** → הוסף מוצר **WhatsApp**.
+4. **WhatsApp → API Setup**: הוסף את המספר, אמת ב-SMS. רשום את **Phone number ID**.
+5. **טוקן קבוע** — Business Settings → System Users → משתמש מערכת (Admin) → Generate token →
+   בחר את האפליקציה + הרשאות `whatsapp_business_messaging` ו-`whatsapp_business_management`. הטוקן לא פג.
+6. **App Secret** — App → Settings → Basic → App Secret (Show).
+7. **Webhook** — App → WhatsApp → Configuration:
+   - Callback URL: `https://executive-assistant-nihe.onrender.com/api/webhooks/meta`
+   - Verify token: מחרוזת שאתה בוחר (= `META_WA_VERIFY_TOKEN`)
+   - Subscribe: שדה **messages**.
+8. **Render → executive-assistant → Environment**: `META_WA_TOKEN`, `META_WA_PHONE_NUMBER_ID`,
+   `META_WA_VERIFY_TOKEN`, `META_APP_SECRET` → Save (מפעיל דפלוי).
+9. בדיקה: שלח וואטסאפ למספר → ההודעה נכנסת ל-**הודעות** באפליקציה.
+10. עובד? → מוחקים את שירות `dalor-waha` ב-Render (חוסך $7). עלות סופית: **$0**.
+
+> אימות עסקי (Business Verification) ב-Security Center פותח מכסות גבוהות + וי ירוק —
+> רץ ברקע, לא חוסם התחלה. עד אז המספר יכול לענות ללקוחות שכתבו אליו, במגבלת נפח יומית.
+
 ## 5. הרצה ראשונה — `draft_only`
 
 המערכת עולה במצב `ASSISTANT_MODE=draft_only`: המזכירה **לא שולחת כלום** אוטומטית, רק מכינה טיוטות ב-`/messages`. אחרי שבוע של מעקב → `/settings` → החלפה ל-`active` (whitelist בלבד: שעות/כתובת/מחירון/זמינות תור).
