@@ -22,7 +22,7 @@ const AUTO_SEND_INTENTS = new Set([
   "appointment_confirm",
 ]);
 
-const INTRO = "היי, כאן ג'ימי — העוזר הדיגיטלי של יאיר 🙂";
+const INTRO = "כאן ג'ימי, העוזר הדיגיטלי של יאיר 🙂";
 const HOLDING = "קיבלתי 🙏 בודק ומחזיר לך תשובה עוד מעט.";
 
 const AUTO_REPLY_WINDOW_MS = 6 * 3600_000;
@@ -148,12 +148,17 @@ async function composeDraft(
     const res = await ModelRouter.complete("writing", {
       system:
         "אתה ג'ימי, העוזר הדיגיטלי של DALOR (מספרה + בגדים לגבר). תשובה קצרה, חמה וישירה בעברית מדוברת בלשון זכר, אימוג'י בודד לכל היותר. " +
-        "השתמש אך ורק בעובדות שסופקו. אם אין עובדה מדויקת — כתוב שתחזור עם תשובה. אסור להמציא מחירים, מלאי או שעות. אל תחתום בשם.",
+        "השתמש אך ורק בעובדות שסופקו. אם אין עובדה מדויקת — כתוב שתחזור עם תשובה. אסור להמציא מחירים, מלאי או שעות. אל תחתום בשם. " +
+        (withIntro
+          ? "פתחנו כבר במשפט היכרות — אל תוסיף ברכה, אל תפתח ב'היי' או 'שלום', עבור ישר לתשובה."
+          : "אפשר לפתוח ב'היי' קצר."),
       messages: [
         { role: "user", content: `עובדות:\n${facts}\n\nשאלת הלקוח (${triage.intent}): ${msg.text}\n\nנסח תשובה:` },
       ],
     });
-    const body = res.text.trim();
+    let body = res.text.trim();
+    // belt-and-suspenders: never double-greet after the intro line
+    if (withIntro) body = body.replace(/^(היי|שלום|אהלן|הי)[,!\s]+/u, "");
     // heuristic: is the answer actually grounded in a fact, or a "I'll check"?
     const grounded =
       AUTO_SEND_INTENTS.has(triage.intent) && body.length > 0 && !/אחזור|אבדוק|אני בודק/.test(body);
