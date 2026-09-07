@@ -60,20 +60,20 @@ export class GoogleProvider implements LLMProvider {
     const tools = toGeminiTools(req.tools);
     if (tools) body.tools = tools;
 
-    let res = await fetch(`${BASE}/models/${model}:generateContent?key=${env.googleApiKey}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
-
-    // one retry on transient overload / rate limit
-    if ((res.status === 503 || res.status === 429) ) {
-      await new Promise((r) => setTimeout(r, 1200));
-      res = await fetch(`${BASE}/models/${model}:generateContent?key=${env.googleApiKey}`, {
+    const call = () =>
+      fetch(`${BASE}/models/${model}:generateContent?key=${env.googleApiKey}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
+
+    // Retry transient overload / rate limit (free tier 503s under load).
+    // 4 attempts with growing back-off: ~0 · 1.5s · 4s · 8s.
+    let res = await call();
+    const backoff = [1500, 4000, 8000];
+    for (let i = 0; (res.status === 503 || res.status === 429) && i < backoff.length; i++) {
+      await new Promise((r) => setTimeout(r, backoff[i]));
+      res = await call();
     }
 
     if (!res.ok) {

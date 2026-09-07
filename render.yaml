@@ -35,7 +35,7 @@ services:
       - key: AI_DEFAULT_PROVIDER
         value: google
       - key: GOOGLE_MODEL
-        value: gemini-3.5-flash-lite
+        value: gemini-3.5-flash # customer replies + orchestrator (warm tone, reasoning). Triage stays on flash-lite.
       - key: APP_TIMEZONE
         value: Asia/Jerusalem
       - key: ASSISTANT_MODE

@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import { Cpu } from "lucide-react";
 
 export function AiStatusPill() {
-  const [status, setStatus] = useState<{ mockMode: boolean; providers: { name: string; available: boolean }[] } | null>(
-    null,
-  );
+  const [status, setStatus] = useState<{
+    mockMode: boolean;
+    defaultProvider: string;
+    providers: { name: string; available: boolean }[];
+  } | null>(null);
 
   useEffect(() => {
     fetch("/api/ai/status")
@@ -16,7 +18,10 @@ export function AiStatusPill() {
   }, []);
 
   if (!status) return null;
-  const live = status.providers.find((p) => p.available);
+  // Show the provider actually used by default, not merely the first with a key.
+  const live =
+    status.providers.find((p) => p.name === status.defaultProvider && p.available) ??
+    status.providers.find((p) => p.available);
 
   return (
     <div
