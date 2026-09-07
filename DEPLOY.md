@@ -1,15 +1,15 @@
 # פריסה — המזכירה של פז ויאיר
 
-**הארכיטקטורה הסופית (עלות: $7/חודש בלבד):**
+**הארכיטקטורה הסופית (עלות: $0/חודש):**
 
 | שירות | איפה | תוכנית |
 |---|---|---|
-| האפליקציה (`executive-assistant`) | Render web | **Free** (נשמרת ערה ע"י cron-job.org) |
+| האפליקציה (`executive-assistant`) | Render web | **Free** (נשמרת ערה ע"י UptimeRobot) |
 | בסיס נתונים | **Turso** (`dalor-mazkira`) | Free |
-| וואטסאפ (`dalor-waha`) | Render, Docker `devlikeapro/waha` | **Starter $7** + דיסק 1GB |
-| תזמון (tick כל 5 דק') | **cron-job.org** | Free |
+| וואטסאפ | **Meta Cloud API** (רשמי) | Free לשיחות שלקוח יזם |
+| תזמון (tick כל 5 דק') | **UptimeRobot** | Free |
 
-Oracle — נזנח (חסימת הרשמה חוזרת).
+Oracle — נזנח (חסימת הרשמה חוזרת). WAHA — נזנח (Meta רשמי, בלי סיכון חסימה).
 
 ---
 
@@ -25,7 +25,7 @@ Oracle — נזנח (חסימת הרשמה חוזרת).
 ## 1. Blueprint
 
 1. render.com → **New → Blueprint** → בחר את הריפו `executive-assistant`.
-2. Render קורא את `render.yaml` ומקים 2 שירותים: `executive-assistant` (web, free) + `dalor-waha` (Docker, starter).
+2. Render קורא את `render.yaml` ומקים שירות אחד: `executive-assistant` (web, free).
 3. אשר. הבנייה הראשונה תיכשל — חסרים משתני סביבה עם `sync: false`. נמלא ונריץ שוב.
 
 ## 2. משתני סביבה
@@ -39,24 +39,15 @@ Oracle — נזנח (חסימת הרשמה חוזרת).
 | `APP_URL` | כתובת ה-web service אחרי שנוצר (`https://executive-assistant-XXXX.onrender.com`) |
 | `APP_PASSWORD` | סיסמת כניסה משותפת |
 | `GOOGLE_API_KEY` | מפתח Gemini |
-| `ANTHROPIC_API_KEY` | מפתח Claude (אופציונלי, לאיכות טובה יותר) |
+| `ANTHROPIC_API_KEY` | מפתח Claude (אופציונלי, גיבוי) |
 | `DALOR_BARBER_ADMIN_KEY` | `2810` |
 | `VAPID_PUBLIC` / `VAPID_PRIVATE` | מפתחות Web Push (`npx web-push generate-vapid-keys`) |
-| `WAHA_API_KEY` | אותו ערך כמו ב-`dalor-waha` |
-| `WAHA_WEBHOOK_SECRET` | מחרוזת אקראית חזקה |
-| `OWNER_WHATSAPP` | `yair@dalor.co.il:972507983306,pazyairat@gmail.com:972547734708` — מפעיל פקודות בעלים + התראות בוואטסאפ |
+| `OWNER_WHATSAPP` | `yair@dalor.co.il:972507983306,pazyairat@gmail.com:972547734708` — פקודות בעלים + התראות בוואטסאפ |
+| `META_WA_TOKEN` · `META_WA_PHONE_NUMBER_ID` · `META_WA_VERIFY_TOKEN` · `META_APP_SECRET` | ראה §4b |
 
 `AUTH_SESSION_SECRET`, `ENCRYPTION_KEY`, `CRON_SECRET` — Render מייצר לבד (`generateValue`).
-`WAHA_BASE_URL` — מתמלא אוטומטית מ-`dalor-waha` (רשת פרטית).
 
-**`dalor-waha` → Environment:**
-
-| מפתח | ערך |
-|---|---|
-| `WAHA_API_KEY` | מחרוזת חזקה — **אותו ערך** ב-`executive-assistant` |
-| `WHATSAPP_API_KEY` | = `WAHA_API_KEY` |
-
-אחרי מילוי → **Manual Deploy** לשני השירותים.
+אחרי מילוי → **Manual Deploy**.
 
 > הסכימה כבר נדחפה ל-Turso והבסיס הוזרע מהמחשב המקומי. שינויי סכימה עתידיים:
 > `LIBSQL_URL=… LIBSQL_AUTH_TOKEN=… npm run db:push` מקומית.
@@ -71,29 +62,10 @@ Oracle — נזנח (חסימת הרשמה חוזרת).
    (`CRON_SECRET` — Render → executive-assistant → Environment → "Show secret". ה-`=` בסוף חייב `%3D` ב-URL.)
 3. Monitoring Interval: **5 minutes**.
 
-## 4. קישור וואטסאפ (יאיר)
+## 4. וואטסאפ — Meta Cloud API (הערוץ היחיד)
 
-ה-session `default` כבר נוצר ב-`dalor-waha` עם ה-webhook מוטמע. נשאר רק לסרוק QR
-מהטלפון של **יאיר** (972507983306). ה-QR מתחלף כל ~60 שניות — צריך שיאיר יהיה נוכח.
-
-מהמחשב:
-
-```bash
-curl -s "https://dalor-waha.onrender.com/api/default/auth/qr?format=image" \
-  -H "X-Api-Key: <WAHA_API_KEY>" -o qr.png && open qr.png
-```
-
-יאיר: WhatsApp → הגדרות → מכשירים מקושרים → קשר מכשיר → סורק.
-
-בדיקה: `curl -s https://dalor-waha.onrender.com/api/sessions/default -H "X-Api-Key: <WAHA_API_KEY>"` → `"status":"WORKING"`.
-
-ה-webhook כבר מוטמע ב-session, אבל אפשר גם לוודא באפליקציה → **אינטגרציות → WhatsApp**.
-
-## 4b. מעבר לוואטסאפ רשמי (Meta Cloud API) — היעד
-
-רשמי = אפס סיכון חסימה, בחינם לשיחות שלקוח יזם, וכשזה עובד **מכבים את `dalor-waha`
-וחוסכים את ה-$7**. הקוד כבר תומך: אם `META_WA_TOKEN` + `META_WA_PHONE_NUMBER_ID`
-מוגדרים — Meta גובר על WAHA אוטומטית.
+רשמי = אפס סיכון חסימה, בחינם לשיחות שלקוח יזם. WAHA נזנח (אין שירות $7).
+עד שמטה מאשרים אין ערוץ בוט חי — וזה בסדר בשבוע של `draft_only`.
 
 1. **מספר** — צריך מספר שאינו רשום כרגע בוואטסאפ הרגיל. אם הוא רשום: וואטסאפ →
    הגדרות → חשבון → מחק חשבון, ואז הוא פנוי ל-API.
@@ -110,7 +82,7 @@ curl -s "https://dalor-waha.onrender.com/api/default/auth/qr?format=image" \
 8. **Render → executive-assistant → Environment**: `META_WA_TOKEN`, `META_WA_PHONE_NUMBER_ID`,
    `META_WA_VERIFY_TOKEN`, `META_APP_SECRET` → Save (מפעיל דפלוי).
 9. בדיקה: שלח וואטסאפ למספר → ההודעה נכנסת ל-**הודעות** באפליקציה.
-10. עובד? → מוחקים את שירות `dalor-waha` ב-Render (חוסך $7). עלות סופית: **$0**.
+10. בדיקה: שלח וואטסאפ למספר → ההודעה נכנסת ל-**הודעות** באפליקציה. עלות: **$0**.
 
 > אימות עסקי (Business Verification) ב-Security Center פותח מכסות גבוהות + וי ירוק —
 > רץ ברקע, לא חוסם התחלה. עד אז המספר יכול לענות ללקוחות שכתבו אליו, במגבלת נפח יומית.
