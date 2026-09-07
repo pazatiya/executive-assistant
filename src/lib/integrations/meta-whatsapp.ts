@@ -56,9 +56,45 @@ interface MetaWebhook {
             list_reply?: { title?: string };
           };
         }[];
+        // delivery/read receipts for messages *we* sent — a distinct event
+        // from `messages` above, carrying no message content, just status.
+        statuses?: {
+          id?: string; // the wamid we got back when sending
+          status?: "sent" | "delivered" | "read" | "failed";
+          recipient_id?: string;
+          timestamp?: string;
+          errors?: { code?: number; title?: string; message?: string }[];
+        }[];
       };
     }[];
   }[];
+}
+
+export interface MetaStatusEvent {
+  wamid: string;
+  status: "sent" | "delivered" | "read" | "failed";
+  to: string;
+  errorSummary?: string;
+}
+
+/** Delivery/read receipts (and send failures) for messages we sent — separate from inbound text. */
+export function parseMetaStatuses(raw: unknown): MetaStatusEvent[] {
+  const evt = raw as MetaWebhook;
+  const out: MetaStatusEvent[] = [];
+  for (const entry of evt.entry ?? []) {
+    for (const change of entry.changes ?? []) {
+      for (const s of change.value?.statuses ?? []) {
+        if (!s.id || !s.status) continue;
+        out.push({
+          wamid: s.id,
+          status: s.status,
+          to: s.recipient_id ?? "",
+          errorSummary: s.errors?.map((e) => `${e.code} ${e.title ?? e.message ?? ""}`).join("; "),
+        });
+      }
+    }
+  }
+  return out;
 }
 
 /** Parse the first usable inbound text message from a Meta webhook body. */

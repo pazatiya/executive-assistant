@@ -1,5 +1,5 @@
 import { env } from "@/lib/env";
-import { metaVerifyChallenge, parseMetaInbound, verifyMetaSignature } from "@/lib/integrations/meta-whatsapp";
+import { metaVerifyChallenge, parseMetaInbound, parseMetaStatuses, verifyMetaSignature } from "@/lib/integrations/meta-whatsapp";
 import { ingestWhatsAppMessage } from "@/lib/agents/inbound-pipeline";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +28,16 @@ export async function POST(req: Request) {
     body = JSON.parse(raw);
   } catch {
     return new Response("bad json", { status: 400 });
+  }
+
+  // delivery/read receipts (and send failures) for messages we sent — logged
+  // so "did it actually reach him" has a real answer, not just "we sent it".
+  for (const s of parseMetaStatuses(body)) {
+    if (s.status === "failed") {
+      console.error(`[meta-wa] ✗ FAILED to=${s.to} wamid=${s.wamid}${s.errorSummary ? ` (${s.errorSummary})` : ""}`);
+    } else {
+      console.log(`[meta-wa] ${s.status === "read" ? "✓✓ read" : s.status === "delivered" ? "✓✓ delivered" : "✓ sent"} to=${s.to} wamid=${s.wamid}`);
+    }
   }
 
   const msg = parseMetaInbound(body);
