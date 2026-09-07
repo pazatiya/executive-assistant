@@ -7,7 +7,7 @@
  * reply is sent back over WhatsApp. The app stays the primary control room;
  * this is the on-the-go layer.
  */
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { users, workspaces } from "@/lib/db/schema";
 import { env } from "@/lib/env";
@@ -24,6 +24,14 @@ const GREETING = /^(היי+|הי|שלום|אהלן|בוקר טוב|ערב טוב
 
 async function dalorWorkspaceId(): Promise<string | null> {
   const ws = await db.query.workspaces.findFirst({ where: eq(workspaces.slug, env.whatsappWorkspaceSlug) });
+  return ws?.id ?? null;
+}
+
+/** The owner's own personal workspace — where "תזכיר לי" / private notes belong. */
+async function personalWorkspaceId(ownerUserId: string): Promise<string | null> {
+  const ws = await db.query.workspaces.findFirst({
+    where: and(eq(workspaces.ownerId, ownerUserId), eq(workspaces.type, "personal")),
+  });
   return ws?.id ?? null;
 }
 
@@ -94,14 +102,20 @@ export async function handleOwnerCommand(ownerUserId: string, text: string): Pro
   }
 
   // ── everything else → the orchestrator, as this owner ───────────
-  if (!wsId) return "לא מצאתי את סביבת DALOR. נסה מהאפליקציה.";
-  const conv = await getOrCreateConversation(ownerUserId, null, wsId);
+  // Default to the owner's PERSONAL workspace: "תזכיר לי", private notes and
+  // "send me…" are personal. Business tools (customer replies, barber calendar)
+  // reach the DALOR workspace on their own.
+  const personalWs = (await personalWorkspaceId(ownerUserId)) ?? wsId;
+  if (!personalWs) return "לא מצאתי סביבה מתאימה. נסה מהאפליקציה.";
+  const conv = await getOrCreateConversation(ownerUserId, null, personalWs);
   try {
     const result = await orchestrate({
       userId: ownerUserId,
-      workspaceId: wsId,
+      workspaceId: personalWs,
       conversationId: conv.id,
-      message: body,
+      message: `[הודעה מ${firstName || "בעלים"} בוואטסאפ — ${firstName ? "לקוח/משימה אישית שלו/ה" : ""}. ` +
+        `אל תחתום "צוות DALOR", אל תניח שזה קשור למספרה אלא אם נאמר במפורש. ` +
+        `נסח ISO-8601 מדויק לזמן שהמשתמש/ת ביקש/ה.]\n\n${body}`,
     });
     return result.reply || "טופל 👍";
   } catch (e) {

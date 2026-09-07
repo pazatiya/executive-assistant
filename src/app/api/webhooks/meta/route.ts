@@ -30,9 +30,12 @@ export async function POST(req: Request) {
     return new Response("bad json", { status: 400 });
   }
 
+  const msg = parseMetaInbound(body);
   // status callbacks (delivered/read) and non-message events carry no `messages[]`
-  const result = await ingestWhatsAppMessage(parseMetaInbound(body));
-  if (!result.ok) return Response.json(result, { status: 503 });
-  // Always 200 to Meta once accepted, so it doesn't retry.
-  return Response.json(result);
+  if (!msg) return Response.json({ ok: true, handled: "ignored" });
+
+  // Process in the background — the orchestrator (owner commands) can take ~20s
+  // and Meta retries the webhook if we don't 200 within a few seconds.
+  void ingestWhatsAppMessage(msg).catch((e) => console.error("ingest failed", e));
+  return Response.json({ ok: true, handled: "accepted" });
 }

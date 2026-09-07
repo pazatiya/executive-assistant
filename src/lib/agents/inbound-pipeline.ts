@@ -20,9 +20,21 @@ export type IngestResult =
   | { ok: false; handled: "no_target" }
   | { ok: true; handled: "message"; id: string; intent: string; outcome: string };
 
+// Meta retries a webhook if we're slow to 200 — the owner-command path (which
+// runs the orchestrator, ~20s) can be hit twice. Short-lived per-process guard.
+const seen = new Map<string, number>();
+function alreadySeen(id: string): boolean {
+  const now = Date.now();
+  for (const [k, t] of seen) if (now - t > 5 * 60_000) seen.delete(k);
+  if (seen.has(id)) return true;
+  seen.set(id, now);
+  return false;
+}
+
 export async function ingestWhatsAppMessage(msg: InboundMessage | null): Promise<IngestResult> {
   if (!msg) return { ok: true, handled: "ignored" };
   if (msg.isGroup || !msg.text || msg.fromMe) return { ok: true, handled: "skipped" };
+  if (alreadySeen(msg.externalId)) return { ok: true, handled: "duplicate" };
 
   // A message from an owner's own number is a command, not a customer.
   if (isOwnerNumber(msg.fromNumber)) {
