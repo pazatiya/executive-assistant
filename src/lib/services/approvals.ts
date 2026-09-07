@@ -77,7 +77,7 @@ export async function createApproval(input: CreateApprovalInput): Promise<Approv
       fallbackUserId: input.userId,
       kind: "approval_pending",
       title: `${row.riskLevel === "red" ? "🔴" : "🟡"} אישור: ${row.title}`,
-      body: row.reason || row.preview.slice(0, 140),
+      body: `${row.preview || row.reason}\n\nלאישור: השב "אשר" (או "סטטוס" לרשימה).`.slice(0, 300),
       href: "/approvals",
       priority: row.riskLevel === "red" ? "urgent" : "high",
     }).catch(() => {});

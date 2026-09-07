@@ -1,12 +1,11 @@
-# Render Blueprint — המזכירה + WAHA.
+# Render Blueprint — המזכירה (app only; WhatsApp via Meta Cloud API).
 # Render → New → Blueprint → pick this repo → Apply.
 # Then set the sync:false env vars in the dashboard (see DEPLOY.md).
 #
 #  - executive-assistant   web, FREE instance (kept warm by UptimeRobot).
 #                          DB is external (Turso) so it survives spin-down.
-#  - dalor-waha            WAHA (WhatsApp), Starter ($7) + 1GB disk for the
-#                          linked session. Must never sleep.
-#  - executive-assistant-tick   cron, every 5 min → scheduler/reminders.
+#  WhatsApp: official Meta Cloud API (free, no self-hosted service).
+#  Scheduler: a free UptimeRobot monitor hits /api/scheduler/tick every 5 min.
 
 services:
   # ── the assistant (app) — free ────────────────────────────────────
@@ -77,11 +76,7 @@ services:
         sync: false
       - key: VAPID_SUBJECT
         value: mailto:dalor@dalor.co.il
-      - key: WAHA_API_KEY
-        sync: false # same value as dalor-waha's WAHA_API_KEY
-      - key: WAHA_WEBHOOK_SECRET
-        sync: false # any strong string; the assistant embeds it in the webhook URL
-      # ── official WhatsApp (Meta Cloud API) — set these and Meta wins over WAHA ──
+      # ── official WhatsApp (Meta Cloud API) — the transport ──────
       - key: META_WA_TOKEN
         sync: false # permanent system-user access token
       - key: META_WA_PHONE_NUMBER_ID
@@ -90,36 +85,9 @@ services:
         sync: false # any string you choose; echoed in the webhook GET challenge
       - key: META_APP_SECRET
         sync: false # Meta app → Settings → Basic → App Secret
-      - key: WAHA_BASE_URL
-        fromService:
-          type: web
-          name: dalor-waha
-          property: hostport
-        # → "dalor-waha:PORT" on the private network; the code prefixes http://
-
-  # ── WAHA (WhatsApp) — paid, always on ─────────────────────────────
-  - type: web
-    name: dalor-waha
-    runtime: image
-    plan: starter
-    image:
-      url: docker.io/devlikeapro/waha:latest
-    autoDeploy: false
-    disk:
-      name: waha-sessions
-      mountPath: /app/.sessions
-      sizeGB: 1
-    envVars:
-      - key: WAHA_API_KEY
-        sync: false # generate a strong key; put the SAME value on executive-assistant
-      - key: WHATSAPP_API_KEY
-        sync: false # = WAHA_API_KEY (WAHA reads either)
-      - key: WHATSAPP_DEFAULT_ENGINE
-        value: NOWEB
-      - key: WAHA_DASHBOARD_ENABLED
-        value: "false"
-      - key: WHATSAPP_RESTART_ALL_SESSIONS
-        value: "true"
+      # WAHA was retired (Meta Cloud API is free + no ban risk). To bring the
+      # self-hosted bridge back: re-add a `dalor-waha` image service and set
+      # WAHA_BASE_URL / WAHA_API_KEY / WAHA_WEBHOOK_SECRET here.
 
   # ── heartbeat ────────────────────────────────────────────────────
   # No paid Render cron. A free UptimeRobot HTTP monitor hits
