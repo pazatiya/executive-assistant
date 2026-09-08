@@ -5,8 +5,7 @@ import { createTask, updateTask, listTasks } from "@/lib/services/tasks";
 import { createReminder, listReminders } from "@/lib/services/reminders";
 import { createGoal } from "@/lib/services/goals";
 import { createMemory } from "@/lib/services/memory";
-import { createApproval } from "@/lib/services/approvals";
-import { listApprovals } from "@/lib/services/approvals";
+import { createApproval, decideApproval, listApprovals } from "@/lib/services/approvals";
 import { listContacts } from "@/lib/services/contacts";
 import { listMessages } from "@/lib/services/messages";
 import { canAccessRow, listScope } from "@/lib/auth/scope";
@@ -165,6 +164,22 @@ const request_approval: ToolFn = async (ctx, input) => {
     approvalId: a.id,
     agent: String(input.agent ?? "qa_safety"),
   };
+};
+
+/**
+ * Decides an approval that's already pending — for when the user confirms in
+ * their own words ("מאשרת", "כן תמחק אותה", "סבבה תבצע") rather than the exact
+ * "אשר"/"דחה" the WhatsApp fast-path regex expects. Without this the model had
+ * no way to act on a clear yes/no and would either re-create a duplicate
+ * approval for the same thing or simply give up and claim it's not possible.
+ */
+const decide_approval: ToolFn = async (ctx, input) => {
+  const approvalId = String(input.approvalId ?? "");
+  const decision = input.decision === "reject" ? "reject" : "approve";
+  if (!approvalId) return { ok: false, summary: "חסר approvalId — קבל אותו מ-get_context kind=approvals" };
+  const r = await decideApproval(ctx.userId, approvalId, decision, { decidedBy: "assistant (בשם המשתמשת)" });
+  if (!r.ok) return { ok: false, summary: r.error === "not_found" ? "האישור לא נמצא" : `כבר טופל (${r.error})` };
+  return { ok: true, summary: decision === "approve" ? "האישור בוצע." : "האישור נדחה.", agent: "qa_safety" };
 };
 
 const draft_email_reply: ToolFn = async (ctx, input) => {
@@ -430,6 +445,7 @@ export const TOOLS: Record<string, ToolFn> = {
   create_goal,
   save_memory,
   request_approval,
+  decide_approval,
   draft_email_reply,
   draft_message_reply,
   send_message_now,
@@ -578,6 +594,19 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
         agent: { type: "string" },
       },
       required: ["title", "actionType", "preview"],
+    },
+  },
+  {
+    name: "decide_approval",
+    description:
+      "מאשר/דוחה אישור שכבר קיים וממתין (approvalId מ-get_context kind=approvals). השתמש בזה כשהמשתמשת מאשרת/דוחה בכל ניסוח משלה (\"מאשרת\", \"כן תמחק אותה\", \"סבבה\", \"לא, תעזוב\") — אל תיצרי request_approval נוסף לאותו דבר, ולעולם אל תגידי שאין לך יכולת לבצע אם יש אישור ממתין רלוונטי.",
+    parameters: {
+      type: "object",
+      properties: {
+        approvalId: { type: "string" },
+        decision: { type: "string", enum: ["approve", "reject"] },
+      },
+      required: ["approvalId", "decision"],
     },
   },
   {
