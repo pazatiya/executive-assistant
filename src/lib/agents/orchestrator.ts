@@ -138,6 +138,7 @@ export async function orchestrate(input: OrchestratorInput): Promise<Orchestrato
       // provider failure (no credits, rate limit, network) — degrade gracefully to
       // the deterministic path so the assistant never hard-fails on the user.
       const msg = e instanceof Error ? e.message : String(e);
+      console.error(`[orchestrator] provider=${route.provider} failed: ${msg.slice(0, 500)}`);
       trace.mock = true;
       trace.provider = "mock";
       trace.toolCalls.push({ tool: "_provider_error", input: { provider: route.provider }, output: { summary: msg.slice(0, 300) } });
@@ -150,15 +151,22 @@ export async function orchestrate(input: OrchestratorInput): Promise<Orchestrato
         result: "failure",
         error: msg.slice(0, 400),
       });
-      const fallback = await mockOrchestrate(ctx, effectiveMessage, trace);
       // a transient Google overload (503 / "high demand") shouldn't read as "no credit"
       const transient = /50[23]|high demand|overload|unavailable|timeout|rate.?limit|429/i.test(msg);
       const hint = transient
-        ? "\n\n⚠️ יש עומס רגעי על ה-AI — נסה/י שוב עוד רגע."
+        ? "⚠️ יש עומס רגעי על ה-AI — נסה/י שוב עוד רגע."
         : /credit balance|billing|quota|insufficient/i.test(msg)
-          ? "\n\n⚠️ אין יתרת קרדיט בחשבון ה-AI. הוסיפי קרדיט או חברי מפתח נוסף ב-Settings › מודל AI."
-          : "\n\n⚠️ ספקי ה-AI לא זמינים כרגע — עברתי למצב לוקאלי, נסה/י שוב.";
-      reply = fallback + hint;
+          ? "⚠️ אין יתרת קרדיט בחשבון ה-AI. הוסיפי קרדיט או חברי מפתח נוסף ב-Settings › מודל AI."
+          : "⚠️ ה-AI לא זמין כרגע, נסה/י שוב עוד רגע.";
+      // Do NOT fall back to mockOrchestrate here — it's a deterministic
+      // demo-mode intent parser meant for "no AI key configured at all", not
+      // for "the real provider hiccuped mid-request". Handing it
+      // effectiveMessage (which carries the hidden internal instruction
+      // wrapper — see owner-commands.ts) made it regex-match the word
+      // "תזכורת" *inside that wrapper* and silently create a bogus reminder,
+      // while echoing the raw wrapper text back as the reply. A plain retry
+      // prompt is the honest, safe response to a transient provider error.
+      reply = hint;
     }
   }
 
