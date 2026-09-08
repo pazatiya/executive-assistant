@@ -52,10 +52,6 @@ export interface RouteOverride {
   model?: string | null;
 }
 
-// Providers that returned a hard "no credit / billing" error this process —
-// skip them on later calls so a Google hiccup doesn't waste a dead round-trip.
-const outOfCredit = new Set<Exclude<ProviderName, "mock">>();
-
 /**
  * The provider to use — just the one preferred (env/workspace default or an
  * explicit override), never a cross-provider chain. The owner wants only
@@ -63,10 +59,21 @@ const outOfCredit = new Set<Exclude<ProviderName, "mock">>();
  * (or falls to mock below) instead of silently switching to Claude/OpenAI —
  * that silent switch was the actual cause of "why does it say claude in the
  * logs" when the workspace AI setting says google.
+ *
+ * There used to be an in-memory "outOfCredit" blocklist here, added when a
+ * provider returned a billing error, so a multi-provider chain wouldn't waste
+ * a round-trip retrying a dead one before falling to the next. With only one
+ * provider ever in the chain now, that blocklist had nothing to skip to — it
+ * just permanently locked Gemini out for the rest of the server's uptime
+ * after a single "credits depleted" error, even minutes after the owner
+ * topped up the balance (nothing ever cleared the flag; only a redeploy
+ * reset it). Removed — a real, current billing error still surfaces per
+ * request via the normal catch below, and clears itself the moment the
+ * provider actually starts responding again.
  */
 function providerChain(preferred: ProviderName): Exclude<ProviderName, "mock">[] {
   if (preferred === "mock") return [];
-  return providers[preferred].available && !outOfCredit.has(preferred) ? [preferred] : [];
+  return providers[preferred].available ? [preferred] : [];
 }
 
 export class ModelRouter {
@@ -108,7 +115,6 @@ export class ModelRouter {
         return result;
       } catch (e) {
         const em = e instanceof Error ? e.message : String(e);
-        if (/credit balance|billing|insufficient|quota exceeded|payment/i.test(em)) outOfCredit.add(p);
         errors.push(`${p}:${em.slice(0, 120)}`);
         // a transient overload on the preferred provider — give it one more shot
         // before falling through to a dead/absent backup.
