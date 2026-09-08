@@ -15,7 +15,7 @@ interface Props {
 
 export function Topbar({ workspaces, activeId, userName, notifications, counts }: Props) {
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b bg-card/40 px-4">
+    <header className="relative z-30 flex h-[68px] shrink-0 items-center gap-2 border-b bg-card/95 px-3 shadow-[0_1px_0_rgba(15,23,42,0.02)] sm:gap-3 sm:px-6">
       <MobileNav counts={counts} />
       <WorkspaceSwitcher workspaces={workspaces} activeId={activeId} />
       <AiStatusPill />
@@ -25,12 +25,12 @@ export function Topbar({ workspaces, activeId, userName, notifications, counts }
       <Link
         href="/login"
         title="החלפת משתמש"
-        className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 transition-colors hover:border-primary/40"
+        className="flex h-10 items-center gap-2 rounded-xl border bg-card px-1.5 shadow-sm transition-all hover:border-primary/30 hover:shadow-md sm:px-2.5"
       >
-        <div className="flex size-6 items-center justify-center rounded-full bg-primary/20 text-xs font-semibold text-primary">
+        <div className="flex size-7 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-[#7b69eb] text-xs font-bold text-white">
           {userName.slice(0, 1)}
         </div>
-        <span className="text-sm">{userName}</span>
+        <span className="hidden max-w-24 truncate text-sm font-medium sm:block">{userName}</span>
       </Link>
     </header>
   );

@@ -9,9 +9,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const { user, workspaces, activeWorkspace, counts } = await loadAppContext();
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar counts={counts} />
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Topbar
           workspaces={workspaces.map((w) => ({ id: w.id, name: w.name, type: w.type, color: w.color }))}
           activeId={activeWorkspace.id}
@@ -19,7 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           notifications={counts.notifications}
           counts={counts}
         />
-        <main className="flex-1 overflow-y-auto">{children}</main>
+        <main className="app-canvas flex-1 overflow-y-auto">{children}</main>
       </div>
       <LiveRefresh />
     </div>

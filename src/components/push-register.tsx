@@ -86,7 +86,7 @@ export function PushRegister() {
       onClick={state === "denied" ? undefined : enable}
       disabled={state === "denied" || state === "working"}
       title={state === "denied" ? "אפשרי התראות בהגדרות הדפדפן" : "קבל תזכורות והתראות גם כשהאפליקציה סגורה"}
-      className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary transition-colors hover:bg-primary/15 disabled:opacity-60"
+      className="hidden h-10 items-center gap-1.5 rounded-xl border border-primary/20 bg-primary/[0.06] px-3 text-xs font-semibold text-primary transition-all hover:bg-primary/10 disabled:opacity-60 xl:flex"
     >
       <Icon className="size-3.5" />
       {label}

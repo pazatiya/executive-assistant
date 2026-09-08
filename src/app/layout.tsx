@@ -12,12 +12,12 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#100e0c",
+  themeColor: "#f5f6fa",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="he" dir="rtl" className={`${font.variable} dark`} suppressHydrationWarning>
+    <html lang="he" dir="rtl" className={font.variable} suppressHydrationWarning>
       <body className="min-h-screen antialiased">{children}</body>
     </html>
   );

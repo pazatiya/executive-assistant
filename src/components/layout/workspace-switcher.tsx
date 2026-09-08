@@ -35,17 +35,17 @@ export function WorkspaceSwitcher({ workspaces, activeId }: { workspaces: WS[]; 
       <button
         onClick={() => setOpen((o) => !o)}
         disabled={pending}
-        className="flex h-9 min-w-[190px] items-center gap-2 rounded-lg border border-input bg-card px-3 text-sm"
+        className="flex h-10 w-[150px] min-w-0 items-center gap-2 rounded-xl border border-input bg-card px-3 text-sm shadow-sm transition-all hover:border-primary/30 hover:shadow-md sm:w-[200px]"
       >
         <span className="size-2.5 rounded-full" style={{ background: active?.color }} />
-        <span className="flex-1 text-right font-medium">{active?.name ?? "—"}</span>
+        <span className="min-w-0 flex-1 truncate text-right font-semibold">{active?.name ?? "—"}</span>
         <ChevronsUpDown className="size-4 text-muted-foreground" />
       </button>
 
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute z-20 mt-1 w-full min-w-[220px] overflow-hidden rounded-lg border bg-popover p-1 shadow-lg">
+          <div className="absolute z-20 mt-2 w-full min-w-[240px] overflow-hidden rounded-2xl border bg-popover p-1.5 shadow-xl">
             {workspaces.map((w) => (
               <button
                 key={w.id}

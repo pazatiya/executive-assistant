@@ -3,51 +3,45 @@
 @tailwind utilities;
 
 /*
- * DALOR — dark, gold + rose-gold. Dark-only (the root layout forces `.dark`);
- * :root mirrors it so any stray light context still renders on-brand.
- * gold      ≈ hsl(41 58% 56%)   #C9A24C
- * rose-gold ≈ hsl(3 44% 68%)    #D69A94
+ * A calm, high-contrast workspace: warm canvas, crisp surfaces and a deep
+ * indigo action colour. Gold remains as a quiet DALOR brand accent.
  */
-:root,
-.dark {
+:root {
   --font-sans: "Assistant", "Rubik", -apple-system, "Segoe UI", sans-serif;
 
-  --background: 24 12% 6%;
-  --foreground: 40 22% 90%;
-  --card: 24 11% 9%;
-  --card-foreground: 40 20% 91%;
-  --popover: 24 12% 8%;
-  --popover-foreground: 40 20% 91%;
+  --background: 225 33% 97%;
+  --foreground: 225 28% 16%;
+  --card: 0 0% 100%;
+  --card-foreground: 225 28% 16%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 225 28% 16%;
 
-  /* gold — primary actions, active nav, focus ring */
-  --primary: 41 58% 56%;
-  --primary-foreground: 26 30% 8%;
+  --primary: 249 58% 48%;
+  --primary-foreground: 0 0% 100%;
 
-  --secondary: 24 9% 15%;
-  --secondary-foreground: 40 16% 86%;
-  --muted: 24 8% 14%;
-  --muted-foreground: 36 10% 62%;
+  --secondary: 228 31% 94%;
+  --secondary-foreground: 225 24% 24%;
+  --muted: 225 28% 95%;
+  --muted-foreground: 224 13% 46%;
 
-  /* rose-gold — soft highlights, badges, accent surfaces */
-  --accent: 3 30% 22%;
-  --accent-foreground: 5 48% 80%;
+  --accent: 39 76% 92%;
+  --accent-foreground: 30 66% 28%;
 
-  --destructive: 358 55% 52%;
-  --destructive-foreground: 20 20% 96%;
-  --success: 152 42% 45%;
-  --success-foreground: 24 12% 6%;
-  --warning: 41 58% 56%;
-  --warning-foreground: 26 30% 8%;
+  --destructive: 0 70% 53%;
+  --destructive-foreground: 0 0% 100%;
+  --success: 154 55% 39%;
+  --success-foreground: 0 0% 100%;
+  --warning: 36 86% 52%;
+  --warning-foreground: 28 60% 17%;
 
-  --border: 32 13% 17%;
-  --input: 32 12% 21%;
-  --ring: 41 58% 56%;
-  --radius: 0.75rem;
+  --border: 225 24% 90%;
+  --input: 225 20% 86%;
+  --ring: 249 58% 48%;
+  --radius: 1rem;
 
-  /* extra brand tokens for gradients / glows */
-  --gold: 41 58% 56%;
-  --gold-bright: 44 70% 66%;
-  --rose-gold: 5 44% 70%;
+  --gold: 39 64% 55%;
+  --gold-bright: 40 72% 61%;
+  --rose-gold: 7 55% 67%;
 }
 
 * {
@@ -59,24 +53,47 @@ body {
   color: hsl(var(--foreground));
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
 }
 
-/* thin scrollbars */
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 999px; }
+::selection { background: hsl(var(--primary) / 0.16); color: hsl(var(--foreground)); }
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-thumb { background: hsl(225 14% 78%); border-radius: 999px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
 .card-surface {
-  background: hsl(var(--card));
+  background: hsl(var(--card) / 0.94);
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
+  box-shadow: 0 1px 2px hsl(225 30% 20% / 0.025), 0 10px 30px hsl(225 30% 20% / 0.035);
 }
 
-.risk-green { color: hsl(var(--success)); background: hsl(var(--success) / 0.12); }
-.risk-yellow { color: hsl(var(--gold-bright)); background: hsl(var(--gold) / 0.14); }
-.risk-red { color: hsl(var(--rose-gold)); background: hsl(var(--destructive) / 0.16); }
+.risk-green { color: hsl(154 58% 29%); background: hsl(var(--success) / 0.1); }
+.risk-yellow { color: hsl(31 79% 34%); background: hsl(var(--warning) / 0.13); }
+.risk-red { color: hsl(0 63% 43%); background: hsl(var(--destructive) / 0.09); }
 
-/* subtle gold hairline under the top bar / on primary surfaces */
-.brand-glow { box-shadow: 0 0 0 1px hsl(var(--gold) / 0.25), 0 8px 30px hsl(var(--gold) / 0.08); }
-.text-gold { color: hsl(var(--gold-bright)); }
+.brand-glow { box-shadow: 0 0 0 1px hsl(var(--primary) / 0.14), 0 14px 36px hsl(var(--primary) / 0.12); }
+.text-gold { color: hsl(34 68% 43%); }
 .text-rose-gold { color: hsl(var(--rose-gold)); }
+
+.app-canvas {
+  background:
+    radial-gradient(circle at 15% 0%, hsl(var(--primary) / 0.055), transparent 27rem),
+    radial-gradient(circle at 85% 12%, hsl(var(--gold) / 0.06), transparent 24rem),
+    hsl(var(--background));
+}
+
+.soft-grid {
+  background-image:
+    linear-gradient(hsl(var(--foreground) / 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--foreground) / 0.025) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
+button, a { outline-offset: 3px; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .card-surface { transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease; }
+}

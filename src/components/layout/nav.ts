@@ -25,21 +25,41 @@ export interface NavItem {
   countKey?: "approvals" | "tasks" | "notifications";
 }
 
-export const NAV: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/assistant", label: "המזכירה", icon: Sparkles },
-  { href: "/brief", label: "Daily Brief", icon: Sun },
-  { href: "/approvals", label: "אישורים", icon: ShieldCheck, countKey: "approvals" },
-  { href: "/tasks", label: "משימות", icon: CheckSquare, countKey: "tasks" },
-  { href: "/calendar", label: "יומן", icon: Calendar },
-  { href: "/messages", label: "הודעות", icon: MessagesSquare },
-  { href: "/documents", label: "מסמכים", icon: FileText },
-  { href: "/automations", label: "אוטומציות", icon: Zap },
-  { href: "/goals", label: "מטרות", icon: Target },
-  { href: "/contacts", label: "אנשי קשר", icon: Users },
-  { href: "/activity", label: "פעילות", icon: Activity },
-  { href: "/memory", label: "זיכרון", icon: Brain },
-  { href: "/integrations", label: "אינטגרציות", icon: Plug },
-  { href: "/workspaces", label: "Workspaces", icon: Layers },
-  { href: "/settings", label: "הגדרות", icon: Settings },
+export interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+export const NAV_GROUPS: NavGroup[] = [
+  {
+    label: "מרכז עבודה",
+    items: [
+      { href: "/dashboard", label: "ראשי", icon: LayoutDashboard },
+      { href: "/assistant", label: "המזכירה", icon: Sparkles },
+      { href: "/brief", label: "תדריך יומי", icon: Sun },
+    ],
+  },
+  {
+    label: "ניהול",
+    items: [
+      { href: "/tasks", label: "משימות", icon: CheckSquare, countKey: "tasks" },
+      { href: "/messages", label: "הודעות", icon: MessagesSquare },
+      { href: "/calendar", label: "יומן", icon: Calendar },
+      { href: "/approvals", label: "אישורים", icon: ShieldCheck, countKey: "approvals" },
+      { href: "/goals", label: "מטרות", icon: Target },
+      { href: "/contacts", label: "אנשי קשר", icon: Users },
+      { href: "/documents", label: "מסמכים", icon: FileText },
+    ],
+  },
+  {
+    label: "כלים ומערכת",
+    items: [
+      { href: "/automations", label: "אוטומציות", icon: Zap },
+      { href: "/activity", label: "מרכז פעילות", icon: Activity },
+      { href: "/memory", label: "זיכרון", icon: Brain },
+      { href: "/integrations", label: "אינטגרציות", icon: Plug },
+      { href: "/workspaces", label: "סביבות עבודה", icon: Layers },
+      { href: "/settings", label: "הגדרות", icon: Settings },
+    ],
+  },
 ];

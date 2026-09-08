@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Cpu } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
 export function AiStatusPill() {
   const [status, setStatus] = useState<{
@@ -25,14 +25,15 @@ export function AiStatusPill() {
 
   return (
     <div
-      className="hidden items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs sm:flex"
+      className="hidden h-10 items-center gap-2 rounded-xl border bg-card px-3 text-xs shadow-sm lg:flex"
       title={
         status.mockMode
           ? "לא מחובר מפתח AI — המזכירה עובדת במצב לוקאלי דטרמיניסטי"
           : `מחובר: ${live?.name}`
       }
     >
-      <Cpu className="size-3.5" />
+      <span className={`size-2 rounded-full ${status.mockMode ? "bg-amber-400" : "bg-emerald-500"}`} />
+      <Sparkles className="size-3.5 text-primary" />
       {status.mockMode ? (
         <span className="text-muted-foreground">מצב לוקאלי (ללא AI)</span>
       ) : (

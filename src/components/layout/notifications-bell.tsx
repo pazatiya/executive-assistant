@@ -54,7 +54,7 @@ export function NotificationsBell({ initialUnread }: { initialUnread: number }) 
     <div className="relative" ref={ref}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="relative flex size-9 items-center justify-center rounded-lg hover:bg-secondary"
+        className="relative flex size-10 items-center justify-center rounded-xl border bg-card shadow-sm transition-all hover:border-primary/30 hover:shadow-md"
       >
         <Bell className="size-4" />
         {unread > 0 && (
@@ -67,7 +67,7 @@ export function NotificationsBell({ initialUnread }: { initialUnread: number }) 
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 z-20 mt-1 w-80 overflow-hidden rounded-lg border bg-popover shadow-lg">
+          <div className="absolute left-0 z-20 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border bg-popover shadow-xl">
             <div className="flex items-center justify-between border-b p-3 text-sm font-medium">
               התראות
               {unread > 0 && (

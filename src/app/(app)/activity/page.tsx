@@ -21,8 +21,8 @@ export default async function ActivityPage() {
       />
       <PageBody>
         <Card className="overflow-hidden">
-          <div className="max-h-[calc(100vh-220px)] overflow-y-auto">
-            <table className="w-full text-sm">
+          <div className="max-h-[calc(100vh-220px)] overflow-auto">
+            <table className="min-w-[760px] w-full text-sm">
               <thead className="sticky top-0 bg-card">
                 <tr className="border-b text-right text-xs text-muted-foreground">
                   <th className="p-3 font-medium">זמן</th>
