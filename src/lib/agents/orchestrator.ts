@@ -253,7 +253,12 @@ async function llmOrchestrate(
       if (result.approvalId) trace.approvalIds.push(result.approvalId);
       if (result.taskId) trace.taskIds.push(result.taskId);
       if (result.reminderId) trace.reminderIds.push(result.reminderId);
-      outcomes.push(`- ${call.name}: ${result.summary}${result.data ? ` ${JSON.stringify(result.data).slice(0, 500)}` : ""}`);
+      // 500 chars was cutting real get_context data mid-list — e.g. get_context
+      // (messages) with 5+ customers easily exceeds that, so anyone past the
+      // cutoff was invisible to the model, not "not found": it never saw them.
+      // 6000 comfortably covers get_context's realistic max (30 messages) while
+      // still bounding a genuinely oversized blob from some other tool.
+      outcomes.push(`- ${call.name}: ${result.summary}${result.data ? ` ${JSON.stringify(result.data).slice(0, 6000)}` : ""}`);
     }
 
     readOnlyStreak = didMutate ? 0 : readOnlyStreak + 1;
@@ -269,12 +274,16 @@ async function llmOrchestrate(
   trace.intent = trace.toolCalls.filter((t) => !t.tool.startsWith("_")).length ? "action" : "chat";
   if (finalText) return finalText;
 
-  // model ran tools but never wrote a summary — build one from what happened
-  const done = trace.toolCalls
-    .filter((t) => !t.tool.startsWith("_") && t.tool !== "get_context")
-    .map((t) => (t.output as { summary?: string })?.summary)
-    .filter(Boolean);
-  return done.length
-    ? `בוצע:\n${done.map((d) => `• ${d}`).join("\n")}`
-    : "עברתי על הבקשה. אם צריך פעולה ספציפית — כתבי לי מה בדיוק לבצע.";
+  // model ran tools but never wrote a summary — build one from what happened.
+  // Distinguish success from failure: dumping a failed tool's raw error under
+  // "בוצע:" (done) reads as a lie, and a wall of tool-call jargon isn't a
+  // question a person can actually answer.
+  const acted = trace.toolCalls.filter((t) => !t.tool.startsWith("_") && t.tool !== "get_context");
+  const succeeded = acted.filter((t) => (t.output as { ok?: boolean })?.ok).map((t) => (t.output as { summary?: string })?.summary).filter(Boolean);
+  const failed = acted.filter((t) => (t.output as { ok?: boolean })?.ok === false).map((t) => (t.output as { summary?: string })?.summary).filter(Boolean);
+
+  const parts: string[] = [];
+  if (succeeded.length) parts.push(`בוצע:\n${succeeded.map((d) => `• ${d}`).join("\n")}`);
+  if (failed.length) parts.push(`לא הצלחתי:\n${failed.map((d) => `• ${d}`).join("\n")}`);
+  return parts.length ? parts.join("\n\n") : "עברתי על הבקשה. אם צריך פעולה ספציפית — כתבי לי מה בדיוק לבצע.";
 }
