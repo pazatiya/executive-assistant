@@ -278,6 +278,24 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
       draftReply: draft,
       priority: "high",
     });
+    // This path (wants_human / clothing / order questions) never wrote to the
+    // activity log at all — the only trace was the in-app notification, which
+    // doesn't show what was actually sent (or that nothing was, if drafted).
+    await logActivity({
+      userId: ownerUserId,
+      workspaceId,
+      agent: "social",
+      action: acked
+        ? `תשובה אוטומטית ל-${msg.authorHandle}: "${draft.slice(0, 100)}"`
+        : `טיוטה הוכנה ל-${msg.authorHandle} (ממתינה לשליחה ידנית): "${draft.slice(0, 100)}"`,
+      tool: msg.channel,
+      target: msg.id,
+      riskLevel: "green",
+      approvalStatus: acked ? "auto" : "not_required",
+      result: "success",
+      autoExecuted: acked,
+      metadata: { intent: triage.intent },
+    });
     const isHuman = triage.intent === "wants_human";
     await notifyOwnersOf(workspaceId, {
       fallbackUserId: ownerUserId,
@@ -313,7 +331,7 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
         userId: ownerUserId,
         workspaceId,
         agent: "social",
-        action: `תשובה אוטומטית ל-${msg.authorHandle}`,
+        action: `תשובה אוטומטית ל-${msg.authorHandle}: "${draft.slice(0, 100)}"`,
         tool: msg.channel,
         target: msg.id,
         riskLevel: "green",

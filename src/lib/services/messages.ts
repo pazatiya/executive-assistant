@@ -60,7 +60,10 @@ export async function createInboundMessage(input: CreateInboundMessageInput): Pr
     userId: input.userId,
     workspaceId: input.workspaceId ?? null,
     agent: "social",
-    action: `הודעה נכנסת (${input.channel}) מ-${input.authorName || input.authorHandle}`,
+    // Include what was actually said — a bare "message came in" row (which
+    // is all this used to log) is useless for auditing "what was sent, what
+    // arrived" without opening the message itself.
+    action: `הודעה נכנסת (${input.channel}) מ-${input.authorName || input.authorHandle}: "${input.text.slice(0, 100)}"`,
     tool: input.channel,
     target: row.id,
     result: "info",
