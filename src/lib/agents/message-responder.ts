@@ -66,6 +66,25 @@ async function recentAutoReplyCount(channel: Message["channel"], authorHandle: s
   return rows.length;
 }
 
+// Owner-issued sends (send_message_now / send_image_to_customer /
+// reach_out_to_customer — see tools.ts) log their target phone on the
+// activity row. If the owner personally sent this customer something
+// recently, they're already in the conversation by hand — the assistant must
+// never auto-send (or auto-ack) over them; it still drafts and notifies as
+// usual, it just never presses send itself. Window slides forward with every
+// message the owner sends, so an active back-and-forth stays covered.
+const OWNER_HANDLING_WINDOW_MS = 60 * 60_000;
+const OWNER_SEND_TOOLS = ["send_message_now", "send_image_to_customer", "reach_out_to_customer"];
+async function ownerHandledRecently(authorHandle: string): Promise<boolean> {
+  const since = new Date(Date.now() - OWNER_HANDLING_WINDOW_MS).toISOString();
+  const rows = await db
+    .select({ tool: activityLogs.tool })
+    .from(activityLogs)
+    .where(and(eq(activityLogs.target, authorHandle), gt(activityLogs.createdAt, since)))
+    .limit(20);
+  return rows.some((r) => OWNER_SEND_TOOLS.includes(r.tool ?? ""));
+}
+
 async function isFirstContact(channel: Message["channel"], authorHandle: string): Promise<boolean> {
   const rows = await db
     .select({ id: messages.id })
@@ -200,11 +219,12 @@ async function composeDraft(
  */
 export async function respondToMessage(input: RespondInput): Promise<RespondResult> {
   const { message: msg, triage, ownerUserId, workspaceId } = input;
-  const [withIntro, facts, mode, autoCount] = await Promise.all([
+  const [withIntro, facts, mode, autoCount, ownerHandling] = await Promise.all([
     isFirstContact(msg.channel, msg.authorHandle),
     factsBlock(ownerUserId, workspaceId),
     getAssistantMode(workspaceId),
     recentAutoReplyCount(msg.channel, msg.authorHandle),
+    ownerHandledRecently(msg.authorHandle),
   ]);
 
   const { text: draft, grounded, bookingApprovalPayload } = await composeDraft(triage, msg, facts, withIntro);
@@ -240,7 +260,7 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
   const ACK_AND_ALERT = new Set(["wants_human", "clothing_availability", "clothing_order", "order_status"]);
   if (ACK_AND_ALERT.has(triage.intent)) {
     let acked = false;
-    if (mode === "active" && autoCount < MAX_CONSECUTIVE_AUTO) {
+    if (mode === "active" && autoCount < MAX_CONSECUTIVE_AUTO && !ownerHandling) {
       const r = await executeAction({
         userId: ownerUserId,
         workspaceId,
@@ -273,7 +293,8 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
     !isComplaint &&
     AUTO_SEND_INTENTS.has(triage.intent) &&
     autoCount < MAX_CONSECUTIVE_AUTO &&
-    !bookingApprovalPayload;
+    !bookingApprovalPayload &&
+    !ownerHandling;
 
   if (canAutoSend) {
     const r = await executeAction({

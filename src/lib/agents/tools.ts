@@ -39,6 +39,11 @@ export interface ToolRunResult {
   taskId?: string;
   reminderId?: string;
   agent?: string;
+  // The customer phone this tool call spoke to, when applicable — recorded on
+  // the activity log so message-responder can tell "the owner is personally
+  // handling this customer right now" and never auto-reply over them (see
+  // ownerHandledRecently in message-responder.ts).
+  target?: string;
 }
 
 type ToolFn = (ctx: AgentContext, input: Record<string, unknown>) => Promise<ToolRunResult>;
@@ -266,7 +271,7 @@ const send_message_now: ToolFn = async (ctx, input) => {
   const r = await sendWhatsApp(m.authorHandle, text);
   if (!r.ok) return { ok: false, summary: `השליחה נכשלה: ${r.error ?? "שגיאה לא ידועה"}` };
   await db.update(messages).set({ status: "replied", draftReply: text }).where(eq(messages.id, messageId));
-  return { ok: true, summary: `נשלח מיד ל-${m.authorName || m.authorHandle}`, agent: "social" };
+  return { ok: true, summary: `נשלח מיד ל-${m.authorName || m.authorHandle}`, agent: "social", target: m.authorHandle };
 };
 
 /** Forwards a photo the owner sent us (see imageMediaId in the conversation)
@@ -302,6 +307,7 @@ const send_image_to_customer: ToolFn = async (ctx, input) => {
     ok: true,
     summary: `${sent}/${ids.length} תמונות נשלחו ל-${m.authorName || m.authorHandle}${errors.length ? ` (${errors.length} נכשלו)` : ""}`,
     agent: "social",
+    target: m.authorHandle,
   };
 };
 
@@ -503,6 +509,7 @@ const reach_out_to_customer: ToolFn = async (ctx, input) => {
     ok: r.ok,
     summary: r.ok ? `נפתחה שיחה עם ${phone} (${r.via}) — תופיע ב"הודעות"` : `לא הצלחתי: ${r.error}`,
     agent: "social",
+    target: phone,
   };
 };
 
@@ -540,6 +547,7 @@ export async function runTool(name: string, ctx: AgentContext, input: Record<str
       agent: res.agent ?? "orchestrator",
       action: res.summary,
       tool: name,
+      target: res.target ?? null,
       result: res.ok ? "success" : "failure",
       autoExecuted: true,
     });
