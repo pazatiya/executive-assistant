@@ -417,9 +417,26 @@ const send_catalog_link: ToolFn = async (ctx, input) => {
   return { ok: true, summary: "טקסט לקטלוג מוכן", data: { text }, agent: "social" };
 };
 
+/**
+ * A real backstop, not just a prompt instruction: reject anything that isn't
+ * shaped like an actual Israeli mobile number — catches a fabricated
+ * placeholder (e.g. "972000000000") even if the model ignores the system
+ * prompt telling it never to invent one.
+ */
+function looksLikeRealIsraeliMobile(phone: string): boolean {
+  const digits = phone.replace(/\D/g, "");
+  const normalized = digits.startsWith("972") ? digits : digits.startsWith("0") ? `972${digits.slice(1)}` : digits;
+  if (!/^9725\d{8}$/.test(normalized)) return false;
+  if (/^(\d)\1+$/.test(normalized)) return false; // all one repeated digit
+  return true;
+}
+
 const reach_out_to_customer: ToolFn = async (ctx, input) => {
   const phone = String(input.phone ?? input.to ?? "").trim();
   if (!phone) return { ok: false, summary: "צריך מספר טלפון של הלקוח" };
+  if (!looksLikeRealIsraeliMobile(phone)) {
+    return { ok: false, summary: `"${phone}" לא נראה כמו מספר נייד ישראלי אמיתי — אל תמציאי מספר, תשאלי את המשתמשת מה המספר האמיתי.` };
+  }
   const { reachOutToCustomer } = await import("@/lib/services/messages");
   const r = await reachOutToCustomer({
     userId: ctx.userId,
