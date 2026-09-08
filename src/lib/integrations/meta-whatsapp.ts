@@ -230,6 +230,28 @@ export async function fetchInboundMediaBytes(
   return { ok: true, bytes, mimeType };
 }
 
+/** Uploads bytes as a new outbound-usable media handle. Shared by
+ * forwardImageToCustomer (re-upload of an inbound photo) and
+ * sendMediaToCustomer (a fresh file from the app's own reply box). */
+async function uploadOutboundMedia(
+  bytes: ArrayBuffer,
+  mimeType: string,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("file", new Blob([bytes], { type: mimeType }), "file");
+  const uploadRes = await fetch(`${graphBase()}/${env.metaWaPhoneNumberId}/media`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${env.metaWaToken}` },
+    body: form,
+  });
+  const upload = (await uploadRes.json().catch(() => null)) as { id?: string; error?: { message?: string } } | null;
+  if (!uploadRes.ok || !upload?.id) {
+    return { ok: false, error: upload?.error?.message ?? `העלאת הקובץ נכשלה (HTTP ${uploadRes.status})` };
+  }
+  return { ok: true, id: upload.id };
+}
+
 /**
  * Forward a photo the owner sent us to a customer.
  *
@@ -247,29 +269,45 @@ export async function forwardImageToCustomer(
   try {
     const dl = await fetchInboundMediaBytes(mediaId);
     if (!dl.ok) return { ok: false, error: dl.error };
-    const { bytes, mimeType } = dl;
-
-    const form = new FormData();
-    form.append("messaging_product", "whatsapp");
-    form.append("file", new Blob([bytes], { type: mimeType }), "image");
-    const uploadRes = await fetch(`${graphBase()}/${env.metaWaPhoneNumberId}/media`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${env.metaWaToken}` },
-      body: form,
-    });
-    const upload = (await uploadRes.json().catch(() => null)) as { id?: string; error?: { message?: string } } | null;
-    if (!uploadRes.ok || !upload?.id) {
-      return { ok: false, error: upload?.error?.message ?? `העלאת התמונה מחדש נכשלה (HTTP ${uploadRes.status})` };
-    }
-
+    const up = await uploadOutboundMedia(dl.bytes, dl.mimeType);
+    if (!up.ok) return up;
     return postMessage({
       to: chatIdToNumber(to),
       type: "image",
-      image: { id: upload.id, ...(caption ? { caption } : {}) },
+      image: { id: up.id, ...(caption ? { caption } : {}) },
     });
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
     console.error(`[meta-wa] forwardImageToCustomer to ${to} threw: ${error}`);
+    return { ok: false, error };
+  }
+}
+
+/**
+ * Sends a fresh local file (picked in the app's own reply box, not something
+ * that arrived over WhatsApp first) to a customer as an image or video —
+ * whichever `mimeType` says. Same upload-then-send mechanics as
+ * forwardImageToCustomer, minus the "download an inbound id first" step.
+ */
+export async function sendMediaToCustomer(
+  to: string,
+  bytes: ArrayBuffer,
+  mimeType: string,
+  caption?: string,
+): Promise<{ ok: boolean; id?: string; error?: string }> {
+  if (!metaWaConfigured()) return { ok: false, error: "Meta WhatsApp לא מוגדר" };
+  try {
+    const up = await uploadOutboundMedia(bytes, mimeType);
+    if (!up.ok) return up;
+    const kind: "image" | "video" = mimeType.startsWith("video/") ? "video" : "image";
+    return postMessage({
+      to: chatIdToNumber(to),
+      type: kind,
+      [kind]: { id: up.id, ...(caption ? { caption } : {}) },
+    });
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    console.error(`[meta-wa] sendMediaToCustomer to ${to} threw: ${error}`);
     return { ok: false, error };
   }
 }

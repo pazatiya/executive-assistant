@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Clock, Send, X, MessageCircle, UserPlus } from "lucide-react";
+import { Check, Clock, Paperclip, Send, X, MessageCircle, UserPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { timeAgo } from "@/lib/utils";
 
@@ -88,6 +88,28 @@ export function CustomerInbox({ messages }: { messages: InboxMessage[] }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action, text }),
       });
+      router.refresh();
+      setOpenId(null);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const [mediaError, setMediaError] = useState<Record<string, string>>({});
+
+  async function sendMedia(id: string, file: File, caption: string) {
+    setBusy(id);
+    setMediaError((e) => ({ ...e, [id]: "" }));
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      if (caption.trim()) form.append("caption", caption.trim());
+      const res = await fetch(`/api/messages/${id}/media`, { method: "POST", body: form });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setMediaError((e) => ({ ...e, [id]: data?.error ?? "שליחת הקובץ נכשלה" }));
+        return;
+      }
       router.refresh();
       setOpenId(null);
     } finally {
@@ -220,7 +242,7 @@ export function CustomerInbox({ messages }: { messages: InboxMessage[] }) {
                         className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
                         placeholder="כתוב תשובה…"
                       />
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <button
                           disabled={busy === m.id || !draft.trim()}
                           onClick={() => act(m.id, "reply", draft)}
@@ -228,6 +250,22 @@ export function CustomerInbox({ messages }: { messages: InboxMessage[] }) {
                         >
                           <Send className="size-3.5" /> שלח ללקוח
                         </button>
+                        <label
+                          className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm ${busy === m.id ? "opacity-50" : "cursor-pointer"}`}
+                        >
+                          <Paperclip className="size-3.5" /> תמונה / סרטון
+                          <input
+                            type="file"
+                            accept="image/*,video/*"
+                            className="hidden"
+                            disabled={busy === m.id}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              e.target.value = "";
+                              if (file) void sendMedia(m.id, file, draft);
+                            }}
+                          />
+                        </label>
                         <button
                           disabled={busy === m.id}
                           onClick={() => act(m.id, "ignore")}
@@ -236,6 +274,7 @@ export function CustomerInbox({ messages }: { messages: InboxMessage[] }) {
                           <X className="size-3.5" /> לא רלוונטי
                         </button>
                       </div>
+                      {mediaError[m.id] && <p className="text-xs text-red-400">{mediaError[m.id]}</p>}
                     </>
                   ) : (
                     <div className="rounded-lg bg-secondary/50 px-3 py-2 text-sm text-muted-foreground">

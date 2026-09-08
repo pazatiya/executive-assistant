@@ -139,6 +139,41 @@ export async function replyToMessage(
   return { ok: r.ok, sent, error: r.ok ? undefined : r.error };
 }
 
+/** Owner sends an image/video from the app's own reply box to a customer. */
+export async function replyToMessageWithMedia(
+  userId: string,
+  messageId: string,
+  bytes: ArrayBuffer,
+  mimeType: string,
+  caption?: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const row = await db.query.messages.findFirst({ where: eq(messages.id, messageId) });
+  if (!row || !(await canAccessRow(userId, row))) return { ok: false, error: "not_found" };
+  if (row.channel !== "whatsapp") return { ok: false, error: "unsupported_channel" };
+
+  const { sendMediaToCustomer } = await import("@/lib/integrations/meta-whatsapp");
+  const r = await sendMediaToCustomer(row.authorHandle, bytes, mimeType, caption);
+  if (!r.ok) return { ok: false, error: r.error };
+
+  await db
+    .update(messages)
+    .set({ status: "replied", ...(caption ? { draftReply: caption } : {}), updatedAt: nowIso() })
+    .where(eq(messages.id, row.id));
+  await logActivity({
+    userId,
+    workspaceId: row.workspaceId,
+    agent: "social",
+    action: `נשלח קובץ ל-${row.authorHandle}`,
+    tool: row.channel,
+    target: row.id,
+    riskLevel: "green",
+    approvalStatus: "auto",
+    result: "success",
+    autoExecuted: true,
+  });
+  return { ok: true };
+}
+
 /**
  * Owner hands a customer to the assistant: the customer wrote to a private line,
  * the owner types their number here, and the bot opens a WhatsApp conversation
