@@ -72,8 +72,11 @@ async function recentAutoReplyCount(channel: Message["channel"], authorHandle: s
 // recently, they're already in the conversation by hand — the assistant must
 // never auto-send (or auto-ack) over them; it still drafts and notifies as
 // usual, it just never presses send itself. Window slides forward with every
-// message the owner sends, so an active back-and-forth stays covered.
-const OWNER_HANDLING_WINDOW_MS = 60 * 60_000;
+// message the owner sends, so an active back-and-forth stays covered — the
+// owner asked specifically for 3 hours (a real negotiation with a customer
+// can easily have 60-90 minute gaps between replies while they think it
+// over, and 1 hour was cutting that off mid-conversation).
+const OWNER_HANDLING_WINDOW_MS = 3 * 60 * 60_000;
 const OWNER_SEND_TOOLS = ["send_message_now", "send_image_to_customer", "reach_out_to_customer"];
 async function ownerHandledRecently(authorHandle: string): Promise<boolean> {
   const since = new Date(Date.now() - OWNER_HANDLING_WINDOW_MS).toISOString();
