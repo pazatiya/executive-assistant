@@ -12,7 +12,7 @@ import { db } from "@/lib/db";
 import { conversations, users, workspaces } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { listApprovals, decideApproval } from "@/lib/services/approvals";
-import { getOrCreateConversation } from "@/lib/services/conversations";
+import { getOrCreateConversation, addMessage } from "@/lib/services/conversations";
 import { orchestrate } from "@/lib/agents/orchestrator";
 
 // "אשר" / "אשר 2" — optional 1-based index; "אשר הכל" / "אשר את כולם" — all
@@ -53,6 +53,30 @@ export async function handleOwnerCommand(ownerUserId: string, text: string, medi
   // Only two fixed owners exist (see OWNER_WHATSAPP) — פז (female) / יאיר (male).
   // Grammatical gender to address them in when the model speaks directly to them.
   const gender = firstName === "פז" ? "נקבה" : "זכר";
+
+  // ── pure photo drop, no caption/instruction with it ──────────────
+  // WhatsApp sends each photo as its own message — 20 photos means 20
+  // separate calls here. Running the full orchestrator (and replying) for
+  // every single one produced a confusing pile of "sent 7! sent 8!"
+  // messages with inconsistent counts. Instead: silently accumulate into the
+  // conversation (get_context(kind="pendingImages") reads it back later) and
+  // say nothing until a real instruction — "send these to X" — arrives.
+  // A *caption* on the photo is very likely itself an instruction ("send this
+  // to X") — only short-circuit the bare, caption-less case; anything with a
+  // caption falls through to the normal orchestrator path below.
+  const imageOnly = mediaId && body === "[תמונה מצורפת]";
+  if (imageOnly) {
+    const personalWs = (await personalWorkspaceId(ownerUserId)) ?? wsId;
+    if (personalWs) {
+      const existing = await db.query.conversations.findFirst({
+        where: and(eq(conversations.userId, ownerUserId), eq(conversations.workspaceId, personalWs)),
+        orderBy: desc(conversations.lastMessageAt),
+      });
+      const conv = await getOrCreateConversation(ownerUserId, existing?.id ?? null, personalWs);
+      await addMessage(conv.id, "user", `[תמונה מצורפת מהבעלים — imageMediaId="${mediaId}"]`);
+    }
+    return "";
+  }
 
   // ── bare greeting → personal hello + what it can do ─────────────
   if (GREETING.test(body)) {

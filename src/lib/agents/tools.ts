@@ -8,6 +8,7 @@ import { createMemory } from "@/lib/services/memory";
 import { createApproval, decideApproval, listApprovals } from "@/lib/services/approvals";
 import { listContacts } from "@/lib/services/contacts";
 import { listMessages } from "@/lib/services/messages";
+import { getMessages as getConversationMessages } from "@/lib/services/conversations";
 import { canAccessRow, listScope } from "@/lib/auth/scope";
 import { db } from "@/lib/db";
 import { emails, messages, workspaces } from "@/lib/db/schema";
@@ -272,8 +273,15 @@ const send_message_now: ToolFn = async (ctx, input) => {
  * to a customer, identified the same way as send_message_now. */
 const send_image_to_customer: ToolFn = async (ctx, input) => {
   const messageId = String(input.messageId ?? "");
-  const imageMediaId = String(input.imageMediaId ?? "");
-  if (!imageMediaId) return { ok: false, summary: "חסר imageMediaId — זה מגיע מהודעת התמונה שהבעלים שלחו" };
+  // Accept either one id or a batch — get_context(kind="pendingImages") is
+  // built for handing over everything the owner just dropped in one call,
+  // instead of one tool call (and one confirmation) per photo.
+  const ids = Array.isArray(input.imageMediaIds)
+    ? (input.imageMediaIds as unknown[]).map(String).filter(Boolean)
+    : input.imageMediaId
+      ? [String(input.imageMediaId)]
+      : [];
+  if (!ids.length) return { ok: false, summary: "חסר imageMediaId/imageMediaIds — זה מגיע מ-get_context kind=pendingImages" };
   const mRow = messageId ? await db.query.messages.findFirst({ where: eq(messages.id, messageId) }) : null;
   const m = mRow && (await canAccessRow(ctx.userId, mRow)) ? mRow : null;
   if (!m) return { ok: false, summary: "לא מצאתי את ההודעה לשלוח אליה — בדוק messageId מ-get_context" };
@@ -281,9 +289,20 @@ const send_image_to_customer: ToolFn = async (ctx, input) => {
     return { ok: false, summary: `ערוץ ${m.channel} לא נתמך לשליחת תמונה` };
   }
   const { forwardImageToCustomer } = await import("@/lib/integrations/meta-whatsapp");
-  const r = await forwardImageToCustomer(m.authorHandle, imageMediaId, input.caption ? String(input.caption) : undefined);
-  if (!r.ok) return { ok: false, summary: `שליחת התמונה נכשלה: ${r.error ?? "שגיאה לא ידועה"}` };
-  return { ok: true, summary: `התמונה נשלחה ל-${m.authorName || m.authorHandle}`, agent: "social" };
+  let sent = 0;
+  const errors: string[] = [];
+  for (const mediaId of ids) {
+    const r = await forwardImageToCustomer(m.authorHandle, mediaId, ids.length === 1 && input.caption ? String(input.caption) : undefined);
+    if (r.ok) sent++;
+    else errors.push(r.error ?? "שגיאה לא ידועה");
+    if (ids.length > 1) await new Promise((res) => setTimeout(res, 400)); // don't hammer the Graph API back-to-back
+  }
+  if (!sent) return { ok: false, summary: `שליחת התמונות נכשלה: ${errors[0] ?? "שגיאה לא ידועה"}` };
+  return {
+    ok: true,
+    summary: `${sent}/${ids.length} תמונות נשלחו ל-${m.authorName || m.authorHandle}${errors.length ? ` (${errors.length} נכשלו)` : ""}`,
+    agent: "social",
+  };
 };
 
 const get_context: ToolFn = async (ctx, input) => {
@@ -306,6 +325,23 @@ const get_context: ToolFn = async (ctx, input) => {
     out.activeReminders = (await listReminders(ctx.userId, { statuses: ["scheduled", "snoozed"] }))
       .slice(0, 15)
       .map((r) => ({ id: r.id, title: r.title, dueAt: r.dueAt, kind: r.kind, status: r.status }));
+  }
+  if (kind === "pendingImages") {
+    // Photos the owner sent us, accumulated silently (see owner-commands.ts —
+    // each one arrives as its own WhatsApp message and is stored without
+    // triggering a reply). Scanning the last 30 minutes of this conversation
+    // for the imageMediaId tag is how the model finds "all of them" for a
+    // batch send, instead of only whichever one happens to still be in its
+    // recent-turns window.
+    const since = new Date(Date.now() - 30 * 60_000).toISOString();
+    const recent = ctx.conversationId ? await getConversationMessages(ctx.conversationId) : [];
+    const seen = new Set<string>();
+    out.pendingImages = recent
+      .filter((r) => r.role === "user" && r.createdAt >= since)
+      .flatMap((r) => [...r.content.matchAll(/imageMediaId="([^"]+)"(?:\s+caption="([^"]*)")?/g)])
+      .map((mm) => ({ mediaId: mm[1], caption: mm[2] || undefined }))
+      .filter((p) => (seen.has(p.mediaId) ? false : (seen.add(p.mediaId), true)))
+      .slice(-50);
   }
   if (kind === "approvals" || kind === "overview") {
     out.pendingApprovals = (await listApprovals(ctx.userId, { statuses: ["pending"] })).map(
@@ -516,10 +552,10 @@ export async function runTool(name: string, ctx: AgentContext, input: Record<str
 export const TOOL_SCHEMAS: ToolSchema[] = [
   {
     name: "get_context",
-    description: "טוען מצב נוכחי לפני החלטה: משימות פתוחות, תזכורות פעילות, אישורים ממתינים, תיבת מייל, הודעות ברשתות, אנשי קשר.",
+    description: "טוען מצב נוכחי לפני החלטה: משימות פתוחות, תזכורות פעילות, אישורים ממתינים, תיבת מייל, הודעות ברשתות, אנשי קשר, תמונות שהבעלים שלחו וממתינות לשליחה (pendingImages).",
     parameters: {
       type: "object",
-      properties: { kind: { type: "string", enum: ["overview", "tasks", "reminders", "approvals", "emails", "messages", "contacts"] } },
+      properties: { kind: { type: "string", enum: ["overview", "tasks", "reminders", "approvals", "emails", "messages", "contacts", "pendingImages"] } },
       required: ["kind"],
     },
   },
@@ -674,15 +710,16 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
   },
   {
     name: "send_image_to_customer",
-    description: "שולח ללקוח תמונה שהבעלים שלחו לך בוואטסאפ (imageMediaId מופיע בהודעה הפנימית שצורפה לתמונה שהם שלחו). messageId מ-get_context kind=messages, בדיוק כמו send_message_now. משתמשים בזה כשמבקשים ממך לשלוח/להעביר תמונה ללקוח.",
+    description: "שולח ללקוח תמונה אחת או כמה (עד 50) שהבעלים שלחו לך בוואטסאפ. לתמונה אחת ספציפית שהוזכרה בהודעה — imageMediaId. לכל התמונות שהבעלים הצטברו לאחרונה ('תשלח לו את כל התמונות') — קרא קודם get_context(kind=pendingImages) והעביר את כל ה-mediaId שקיבלת ב-imageMediaIds. messageId מ-get_context kind=messages, בדיוק כמו send_message_now.",
     parameters: {
       type: "object",
       properties: {
         messageId: { type: "string" },
-        imageMediaId: { type: "string" },
+        imageMediaId: { type: "string", description: "לתמונה בודדת" },
+        imageMediaIds: { type: "array", items: { type: "string" }, description: "לכמה תמונות בבת אחת — מ-get_context(kind=pendingImages)" },
         caption: { type: "string" },
       },
-      required: ["messageId", "imageMediaId"],
+      required: ["messageId"],
     },
   },
   {
