@@ -44,8 +44,8 @@ export async function ingestWhatsAppMessage(msg: InboundMessage | null): Promise
   if (isOwnerNumber(msg.fromNumber)) {
     const ownerId = await ownerUserIdForNumber(msg.fromNumber);
     if (ownerId) {
-      console.log(`[owner_command] from=${msg.fromNumber} text="${msg.text.slice(0, 120)}"`);
-      const reply = await handleOwnerCommand(ownerId, msg.text);
+      console.log(`[owner_command] from=${msg.fromNumber} text="${msg.text.slice(0, 120)}"${msg.mediaId ? ` mediaId=${msg.mediaId}` : ""}`);
+      const reply = await handleOwnerCommand(ownerId, msg.text, msg.mediaId);
       console.log(`[owner_command] reply ready (${reply.length} chars) — sending back to ${msg.fromNumber}`);
       const sent = await sendWhatsApp(msg.fromNumber, reply).catch((e) => ({ ok: false, error: e instanceof Error ? e.message : String(e) }));
       if (!sent.ok) {

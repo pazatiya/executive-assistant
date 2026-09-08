@@ -55,6 +55,7 @@ interface MetaWebhook {
             button_reply?: { title?: string };
             list_reply?: { title?: string };
           };
+          image?: { id?: string; caption?: string; mime_type?: string };
         }[];
         // delivery/read receipts for messages *we* sent — a distinct event
         // from `messages` above, carrying no message content, just status.
@@ -114,7 +115,9 @@ export function parseMetaInbound(raw: unknown): InboundMessage | null {
         m.button?.text ??
         m.interactive?.button_reply?.title ??
         m.interactive?.list_reply?.title ??
-        "";
+        // an image with no caption still needs non-empty text, or it's
+        // silently dropped by the "!msg.text → skipped" check downstream.
+        (m.image ? `[תמונה מצורפת${m.image.caption ? `: ${m.image.caption}` : ""}]` : "");
       const contact = value?.contacts?.find((c) => c.wa_id === m.from) ?? value?.contacts?.[0];
       return {
         externalId: String(m.id ?? `${m.from}:${m.timestamp ?? Date.now()}`),
@@ -127,6 +130,7 @@ export function parseMetaInbound(raw: unknown): InboundMessage | null {
           : new Date().toISOString(),
         fromMe: false, // Meta never delivers our own outbound as an inbound message
         isGroup: false, // the Cloud API has no group messaging
+        mediaId: m.image?.id,
       };
     }
   }
@@ -188,4 +192,57 @@ export async function sendMetaTemplate(to: string, bodyParams: string[] = []) {
         : {}),
     },
   });
+}
+
+/**
+ * Forward a photo the owner sent us to a customer.
+ *
+ * An *inbound* media id is only readable, never sendable — Meta requires
+ * downloading the bytes and re-uploading them under our own number to get an
+ * outbound-usable media handle. So: fetch the temporary download URL for
+ * `mediaId`, pull the bytes, re-upload, then send using the new handle.
+ */
+export async function forwardImageToCustomer(
+  to: string,
+  mediaId: string,
+  caption?: string,
+): Promise<{ ok: boolean; id?: string; error?: string }> {
+  if (!metaWaConfigured()) return { ok: false, error: "Meta WhatsApp לא מוגדר" };
+  try {
+    const metaRes = await fetch(`${graphBase()}/${mediaId}`, {
+      headers: { Authorization: `Bearer ${env.metaWaToken}` },
+    });
+    const meta = (await metaRes.json().catch(() => null)) as { url?: string; mime_type?: string; error?: { message?: string } } | null;
+    if (!metaRes.ok || !meta?.url) {
+      return { ok: false, error: meta?.error?.message ?? `לא הצלחתי לאתר את התמונה (HTTP ${metaRes.status})` };
+    }
+
+    const fileRes = await fetch(meta.url, { headers: { Authorization: `Bearer ${env.metaWaToken}` } });
+    if (!fileRes.ok) return { ok: false, error: `הורדת התמונה נכשלה (HTTP ${fileRes.status})` };
+    const bytes = await fileRes.arrayBuffer();
+    const mimeType = meta.mime_type ?? fileRes.headers.get("content-type") ?? "image/jpeg";
+
+    const form = new FormData();
+    form.append("messaging_product", "whatsapp");
+    form.append("file", new Blob([bytes], { type: mimeType }), "image");
+    const uploadRes = await fetch(`${graphBase()}/${env.metaWaPhoneNumberId}/media`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${env.metaWaToken}` },
+      body: form,
+    });
+    const upload = (await uploadRes.json().catch(() => null)) as { id?: string; error?: { message?: string } } | null;
+    if (!uploadRes.ok || !upload?.id) {
+      return { ok: false, error: upload?.error?.message ?? `העלאת התמונה מחדש נכשלה (HTTP ${uploadRes.status})` };
+    }
+
+    return postMessage({
+      to: chatIdToNumber(to),
+      type: "image",
+      image: { id: upload.id, ...(caption ? { caption } : {}) },
+    });
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    console.error(`[meta-wa] forwardImageToCustomer to ${to} threw: ${error}`);
+    return { ok: false, error };
+  }
 }

@@ -268,6 +268,24 @@ const send_message_now: ToolFn = async (ctx, input) => {
   return { ok: true, summary: `נשלח מיד ל-${m.authorName || m.authorHandle}`, agent: "social" };
 };
 
+/** Forwards a photo the owner sent us (see imageMediaId in the conversation)
+ * to a customer, identified the same way as send_message_now. */
+const send_image_to_customer: ToolFn = async (ctx, input) => {
+  const messageId = String(input.messageId ?? "");
+  const imageMediaId = String(input.imageMediaId ?? "");
+  if (!imageMediaId) return { ok: false, summary: "חסר imageMediaId — זה מגיע מהודעת התמונה שהבעלים שלחו" };
+  const mRow = messageId ? await db.query.messages.findFirst({ where: eq(messages.id, messageId) }) : null;
+  const m = mRow && (await canAccessRow(ctx.userId, mRow)) ? mRow : null;
+  if (!m) return { ok: false, summary: "לא מצאתי את ההודעה לשלוח אליה — בדוק messageId מ-get_context" };
+  if (m.channel !== "whatsapp") {
+    return { ok: false, summary: `ערוץ ${m.channel} לא נתמך לשליחת תמונה` };
+  }
+  const { forwardImageToCustomer } = await import("@/lib/integrations/meta-whatsapp");
+  const r = await forwardImageToCustomer(m.authorHandle, imageMediaId, input.caption ? String(input.caption) : undefined);
+  if (!r.ok) return { ok: false, summary: `שליחת התמונה נכשלה: ${r.error ?? "שגיאה לא ידועה"}` };
+  return { ok: true, summary: `התמונה נשלחה ל-${m.authorName || m.authorHandle}`, agent: "social" };
+};
+
 const get_context: ToolFn = async (ctx, input) => {
   const kind = String(input.kind ?? "overview");
   const out: Record<string, unknown> = {};
@@ -466,6 +484,7 @@ export const TOOLS: Record<string, ToolFn> = {
   draft_email_reply,
   draft_message_reply,
   send_message_now,
+  send_image_to_customer,
   get_context,
   business_advice,
   check_availability,
@@ -651,6 +670,19 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
       type: "object",
       properties: { messageId: { type: "string" }, text: { type: "string" } },
       required: ["messageId", "text"],
+    },
+  },
+  {
+    name: "send_image_to_customer",
+    description: "שולח ללקוח תמונה שהבעלים שלחו לך בוואטסאפ (imageMediaId מופיע בהודעה הפנימית שצורפה לתמונה שהם שלחו). messageId מ-get_context kind=messages, בדיוק כמו send_message_now. משתמשים בזה כשמבקשים ממך לשלוח/להעביר תמונה ללקוח.",
+    parameters: {
+      type: "object",
+      properties: {
+        messageId: { type: "string" },
+        imageMediaId: { type: "string" },
+        caption: { type: "string" },
+      },
+      required: ["messageId", "imageMediaId"],
     },
   },
   {

@@ -41,8 +41,10 @@ function listPendingText(pending: { title: string; preview: string; context: str
     .join("\n");
 }
 
-/** Returns the text to send back to the owner. */
-export async function handleOwnerCommand(ownerUserId: string, text: string): Promise<string> {
+/** Returns the text to send back to the owner. `mediaId` is set when this
+ * message carried a photo — kept in the conversation so a later message like
+ * "תשלח את זה ל..." can reference it (see send_image_to_customer). */
+export async function handleOwnerCommand(ownerUserId: string, text: string, mediaId?: string): Promise<string> {
   const body = text.trim();
   const wsId = await dalorWorkspaceId();
   const scope = wsId ? { workspaceId: wsId } : {};
@@ -128,7 +130,8 @@ export async function handleOwnerCommand(ownerUserId: string, text: string): Pro
         `בגוף שני, בלשון ${gender} (${gender === "נקבה" ? '"את", "תרצי", "אשלח לך"' : '"אתה", "תרצה", "אשלח לך"'}) — לעולם לא בשם או בגוף שלישי כמו "${firstName || "הבעלים"}", גם אם שמה/ו מוזכר כאן. ` +
         `אל תחתמי "צוות DALOR", אל תניחי שזה קשור למספרה אלא אם נאמר במפורש. ` +
         `אם כן מדובר בבירור בלקוח/הזמנה/DALOR (שם לקוח, פנייה עסקית) — ביצירת משימה/תזכורת סמני workspace="business", אחרת השאירי workspace="personal" (ברירת מחדל). ` +
-        `נסחי ISO-8601 מדויק לזמן שהתבקש.]\n\n${body}`,
+        `נסחי ISO-8601 מדויק לזמן שהתבקש.]\n\n${body}` +
+        (mediaId ? `\n\n[תמונה מצורפת להודעה זו — imageMediaId="${mediaId}". אם מבקשים ממך בהמשך לשלוח אותה ללקוח, השתמשי ב-send_image_to_customer עם ה-imageMediaId הזה.]` : ""),
     });
     return result.reply || "טופל 👍";
   } catch (e) {
