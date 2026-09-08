@@ -6,6 +6,17 @@ import { notifyOwnersOf } from "@/lib/services/notifications";
 
 export const dynamic = "force-dynamic";
 
+// Meta can redeliver the same status webhook more than once — dedupe by
+// wamid so a single failed send only ever produces one owner notification.
+const notifiedFailures = new Map<string, number>();
+function alreadyNotifiedFailure(wamid: string): boolean {
+  const now = Date.now();
+  for (const [k, t] of notifiedFailures) if (now - t > 30 * 60_000) notifiedFailures.delete(k);
+  if (notifiedFailures.has(wamid)) return true;
+  notifiedFailures.set(wamid, now);
+  return false;
+}
+
 /**
  * Official WhatsApp (Meta Cloud API) — customer messages only.
  * Same policy as the WAHA webhook: the assistant only answers customers; all
@@ -37,15 +48,21 @@ export async function POST(req: Request) {
   for (const s of parseMetaStatuses(body)) {
     if (s.status === "failed") {
       console.error(`[meta-wa] ✗ FAILED to=${s.to} wamid=${s.wamid}${s.errorSummary ? ` (${s.errorSummary})` : ""}`);
+      if (alreadyNotifiedFailure(s.wamid)) continue; // Meta can redeliver the same status event
       // A send that looked ok at request time can still fail delivery
-      // (invalid number, blocked, etc.) — that's silent otherwise, so ping
-      // the owners rather than let it only exist in a log nobody reads.
+      // (invalid number, blocked, etc.) — that's silent otherwise, so tell
+      // the owners. kind:"info" (app + push only, never another WhatsApp
+      // send) is deliberate: this same failure path fires when a send TO THE
+      // OWNER fails (e.g. their number is rate-limited) — pinging them about
+      // it *by WhatsApp* used to trigger another failed-status webhook for
+      // THAT message, which triggered another WhatsApp ping, forever. A
+      // hundred-message-a-second flood on the owner's phone was that loop.
       resolveWhatsAppTarget()
         .then((target) =>
           target
             ? notifyOwnersOf(target.workspaceId, {
                 fallbackUserId: target.userId,
-                kind: "proactive",
+                kind: "info",
                 title: `✗ הודעה לא הגיעה ל-${s.to}`,
                 body: s.errorSummary || "השליחה נכשלה בפועל אחרי שנראתה מוצלחת בהתחלה.",
                 priority: "high",
