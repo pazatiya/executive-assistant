@@ -98,9 +98,19 @@ export function parseMetaStatuses(raw: unknown): MetaStatusEvent[] {
   return out;
 }
 
-/** Parse the first usable inbound text message from a Meta webhook body. */
-export function parseMetaInbound(raw: unknown): InboundMessage | null {
+/**
+ * Parse every usable inbound message from a Meta webhook body.
+ *
+ * A single webhook POST can carry MULTIPLE messages — Meta batches them into
+ * one `value.messages[]` array when several arrive close together (exactly
+ * what happens when someone shares many photos at once from their gallery).
+ * This used to return only `messages?.[0]`, so a burst of 20+ photos silently
+ * lost everything but the first one — no error, no log, just gone. Every
+ * entry/change/message in the payload must be walked and returned.
+ */
+export function parseMetaInboundAll(raw: unknown): InboundMessage[] {
   const evt = raw as MetaWebhook;
+  const out: InboundMessage[] = [];
   for (const entry of evt.entry ?? []) {
     for (const change of entry.changes ?? []) {
       const value = change.value;
@@ -108,33 +118,34 @@ export function parseMetaInbound(raw: unknown): InboundMessage | null {
       // other numbers (e.g. the booking bot) on the same webhook.
       const pnid = value?.metadata?.phone_number_id;
       if (env.metaWaPhoneNumberId && pnid && pnid !== env.metaWaPhoneNumberId) continue;
-      const m = value?.messages?.[0];
-      if (!m || !m.from) continue;
-      const text =
-        m.text?.body ??
-        m.button?.text ??
-        m.interactive?.button_reply?.title ??
-        m.interactive?.list_reply?.title ??
-        // an image with no caption still needs non-empty text, or it's
-        // silently dropped by the "!msg.text → skipped" check downstream.
-        (m.image ? `[תמונה מצורפת${m.image.caption ? `: ${m.image.caption}` : ""}]` : "");
-      const contact = value?.contacts?.find((c) => c.wa_id === m.from) ?? value?.contacts?.[0];
-      return {
-        externalId: String(m.id ?? `${m.from}:${m.timestamp ?? Date.now()}`),
-        fromChatId: `${chatIdToNumber(m.from)}@c.us`,
-        fromNumber: chatIdToNumber(m.from),
-        authorName: contact?.profile?.name ?? null,
-        text: text.trim(),
-        receivedAt: m.timestamp
-          ? new Date(Number(m.timestamp) * 1000).toISOString()
-          : new Date().toISOString(),
-        fromMe: false, // Meta never delivers our own outbound as an inbound message
-        isGroup: false, // the Cloud API has no group messaging
-        mediaId: m.image?.id,
-      };
+      for (const m of value?.messages ?? []) {
+        if (!m || !m.from) continue;
+        const text =
+          m.text?.body ??
+          m.button?.text ??
+          m.interactive?.button_reply?.title ??
+          m.interactive?.list_reply?.title ??
+          // an image with no caption still needs non-empty text, or it's
+          // silently dropped by the "!msg.text → skipped" check downstream.
+          (m.image ? `[תמונה מצורפת${m.image.caption ? `: ${m.image.caption}` : ""}]` : "");
+        const contact = value?.contacts?.find((c) => c.wa_id === m.from) ?? value?.contacts?.[0];
+        out.push({
+          externalId: String(m.id ?? `${m.from}:${m.timestamp ?? Date.now()}`),
+          fromChatId: `${chatIdToNumber(m.from)}@c.us`,
+          fromNumber: chatIdToNumber(m.from),
+          authorName: contact?.profile?.name ?? null,
+          text: text.trim(),
+          receivedAt: m.timestamp
+            ? new Date(Number(m.timestamp) * 1000).toISOString()
+            : new Date().toISOString(),
+          fromMe: false, // Meta never delivers our own outbound as an inbound message
+          isGroup: false, // the Cloud API has no group messaging
+          mediaId: m.image?.id,
+        });
+      }
     }
   }
-  return null;
+  return out;
 }
 
 async function postMessage(payload: Record<string, unknown>): Promise<{ ok: boolean; id?: string; error?: string }> {

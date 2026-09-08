@@ -1,5 +1,5 @@
 import { env } from "@/lib/env";
-import { metaVerifyChallenge, parseMetaInbound, parseMetaStatuses, verifyMetaSignature } from "@/lib/integrations/meta-whatsapp";
+import { metaVerifyChallenge, parseMetaInboundAll, parseMetaStatuses, verifyMetaSignature } from "@/lib/integrations/meta-whatsapp";
 import { ingestWhatsAppMessage } from "@/lib/agents/inbound-pipeline";
 import { resolveWhatsAppTarget } from "@/lib/integrations/whatsapp-context";
 import { notifyOwnersOf } from "@/lib/services/notifications";
@@ -58,12 +58,19 @@ export async function POST(req: Request) {
     }
   }
 
-  const msg = parseMetaInbound(body);
+  const msgs = parseMetaInboundAll(body);
   // status callbacks (delivered/read) and non-message events carry no `messages[]`
-  if (!msg) return Response.json({ ok: true, handled: "ignored" });
+  if (!msgs.length) return Response.json({ ok: true, handled: "ignored" });
+  if (msgs.length > 1) console.log(`[meta-wa] webhook batch: ${msgs.length} messages in one call`);
 
   // Process in the background — the orchestrator (owner commands) can take ~20s
-  // and Meta retries the webhook if we don't 200 within a few seconds.
-  void ingestWhatsAppMessage(msg).catch((e) => console.error("ingest failed", e));
-  return Response.json({ ok: true, handled: "accepted" });
+  // and Meta retries the webhook if we don't 200 within a few seconds. Run
+  // sequentially (not Promise.all) so a burst of photos lands in the same
+  // order it was sent — an owner-command reply mid-burst would otherwise race.
+  void (async () => {
+    for (const msg of msgs) {
+      await ingestWhatsAppMessage(msg).catch((e) => console.error("ingest failed", e));
+    }
+  })();
+  return Response.json({ ok: true, handled: "accepted", count: msgs.length });
 }
