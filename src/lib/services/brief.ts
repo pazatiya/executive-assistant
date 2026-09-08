@@ -16,6 +16,22 @@ export interface MorningBrief {
   suggestedOrder: string[];
 }
 
+// Tool/agent-loop internals whose failures are OUR bugs to chase in the
+// Render logs / activity center — not something the owner needs in her
+// evening summary. Mirrors the AI tool names in tools.ts and the provider
+// names in model-router.ts. Anything NOT in this set (whatsapp sends, an
+// appointment reminder that didn't reach a customer, etc.) is real business
+// impact and stays in the brief.
+const SYSTEM_TOOLS = new Set([
+  "google", "anthropic", "openai", "mock",
+  "reach_out_to_customer", "create_task", "update_task", "create_reminder",
+  "create_goal", "save_memory", "request_approval", "decide_approval",
+  "draft_email_reply", "draft_message_reply", "send_message_now",
+  "send_image_to_customer", "get_context", "business_advice",
+  "check_availability", "todays_appointments", "book_appointment",
+  "send_catalog_link",
+]);
+
 export interface EndOfDayBrief {
   generatedAt: string;
   completed: { id: string; title: string }[];
@@ -202,10 +218,12 @@ export async function buildEndOfDayBrief(userId: string, workspaceId?: string): 
     .from(approvals)
     .where(and(apprScope, gte(approvals.updatedAt, since)));
 
-  const failures = await db
-    .select()
-    .from(activityLogs)
-    .where(and(actScope, eq(activityLogs.result, "failure"), gte(activityLogs.createdAt, since)));
+  const failures = (
+    await db
+      .select()
+      .from(activityLogs)
+      .where(and(actScope, eq(activityLogs.result, "failure"), gte(activityLogs.createdAt, since)))
+  ).filter((f) => !SYSTEM_TOOLS.has(f.tool ?? ""));
 
   return {
     generatedAt: nowIso(),
