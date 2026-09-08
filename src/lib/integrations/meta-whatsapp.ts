@@ -206,6 +206,31 @@ export async function sendMetaTemplate(to: string, bodyParams: string[] = []) {
 }
 
 /**
+ * Download the bytes of ANY media id we've received (inbound photo from an
+ * owner or a customer) — the id itself is never a URL, Meta requires first
+ * asking it for a short-lived download link, authenticated with our token
+ * both times. Shared by forwardImageToCustomer (re-upload path) and the
+ * /api/whatsapp/media proxy the app's UI images point at.
+ */
+export async function fetchInboundMediaBytes(
+  mediaId: string,
+): Promise<{ ok: true; bytes: ArrayBuffer; mimeType: string } | { ok: false; error: string }> {
+  if (!metaWaConfigured()) return { ok: false, error: "Meta WhatsApp לא מוגדר" };
+  const metaRes = await fetch(`${graphBase()}/${mediaId}`, {
+    headers: { Authorization: `Bearer ${env.metaWaToken}` },
+  });
+  const meta = (await metaRes.json().catch(() => null)) as { url?: string; mime_type?: string; error?: { message?: string } } | null;
+  if (!metaRes.ok || !meta?.url) {
+    return { ok: false, error: meta?.error?.message ?? `לא הצלחתי לאתר את התמונה (HTTP ${metaRes.status})` };
+  }
+  const fileRes = await fetch(meta.url, { headers: { Authorization: `Bearer ${env.metaWaToken}` } });
+  if (!fileRes.ok) return { ok: false, error: `הורדת התמונה נכשלה (HTTP ${fileRes.status})` };
+  const bytes = await fileRes.arrayBuffer();
+  const mimeType = meta.mime_type ?? fileRes.headers.get("content-type") ?? "image/jpeg";
+  return { ok: true, bytes, mimeType };
+}
+
+/**
  * Forward a photo the owner sent us to a customer.
  *
  * An *inbound* media id is only readable, never sendable — Meta requires
@@ -220,18 +245,9 @@ export async function forwardImageToCustomer(
 ): Promise<{ ok: boolean; id?: string; error?: string }> {
   if (!metaWaConfigured()) return { ok: false, error: "Meta WhatsApp לא מוגדר" };
   try {
-    const metaRes = await fetch(`${graphBase()}/${mediaId}`, {
-      headers: { Authorization: `Bearer ${env.metaWaToken}` },
-    });
-    const meta = (await metaRes.json().catch(() => null)) as { url?: string; mime_type?: string; error?: { message?: string } } | null;
-    if (!metaRes.ok || !meta?.url) {
-      return { ok: false, error: meta?.error?.message ?? `לא הצלחתי לאתר את התמונה (HTTP ${metaRes.status})` };
-    }
-
-    const fileRes = await fetch(meta.url, { headers: { Authorization: `Bearer ${env.metaWaToken}` } });
-    if (!fileRes.ok) return { ok: false, error: `הורדת התמונה נכשלה (HTTP ${fileRes.status})` };
-    const bytes = await fileRes.arrayBuffer();
-    const mimeType = meta.mime_type ?? fileRes.headers.get("content-type") ?? "image/jpeg";
+    const dl = await fetchInboundMediaBytes(mediaId);
+    if (!dl.ok) return { ok: false, error: dl.error };
+    const { bytes, mimeType } = dl;
 
     const form = new FormData();
     form.append("messaging_product", "whatsapp");

@@ -56,13 +56,17 @@ export interface RouteOverride {
 // skip them on later calls so a Google hiccup doesn't waste a dead round-trip.
 const outOfCredit = new Set<Exclude<ProviderName, "mock">>();
 
-/** Ordered preference of real providers to try. First = the user/env default. */
+/**
+ * The provider to use — just the one preferred (env/workspace default or an
+ * explicit override), never a cross-provider chain. The owner wants only
+ * Gemini talking to customers/logs, on purpose: if it errors, the call fails
+ * (or falls to mock below) instead of silently switching to Claude/OpenAI —
+ * that silent switch was the actual cause of "why does it say claude in the
+ * logs" when the workspace AI setting says google.
+ */
 function providerChain(preferred: ProviderName): Exclude<ProviderName, "mock">[] {
-  const all: Exclude<ProviderName, "mock">[] = ["anthropic", "google", "openai"];
-  const head = all.filter((p) => p === preferred);
-  return [...head, ...all.filter((p) => p !== preferred)].filter(
-    (p) => providers[p].available && !outOfCredit.has(p),
-  );
+  if (preferred === "mock") return [];
+  return providers[preferred].available && !outOfCredit.has(preferred) ? [preferred] : [];
 }
 
 export class ModelRouter {

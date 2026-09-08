@@ -261,6 +261,11 @@ export const messages = sqliteTable(
     priority: text("priority").$type<"low" | "normal" | "high" | "urgent">().notNull().default("normal"),
     status: text("status").$type<"new" | "drafted" | "waiting_approval" | "replied" | "ignored">().notNull().default("new"),
     draftReply: text("draft_reply"),
+    // Meta media id of an inbound photo, when this message carried one — only
+    // readable via our own access token (see fetchInboundMediaBytes), so the
+    // app proxies it through /api/whatsapp/media/[mediaId] rather than
+    // linking straight to Meta's URL.
+    mediaId: text("media_id"),
     source: text("source").$type<"live" | "seed" | "manual">().notNull().default("manual"),
     ...timestamps,
   },

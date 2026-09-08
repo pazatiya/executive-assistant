@@ -48,6 +48,7 @@ export default async function MessagesPage() {
     status: m.status,
     draftReply: m.draftReply,
     receivedAt: m.receivedAt,
+    mediaId: m.mediaId,
   }));
 
   return (

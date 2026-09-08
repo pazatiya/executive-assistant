@@ -29,7 +29,7 @@ function systemPrompt(opts: {
 - שמות בעברית ובאנגלית/תעתיק עשויים להיות אותו אדם (למשל "בן ברוך" ו-"Ben Baruch") — בדוק גם התאמה כזו לפני שאת מסיקה "לא נמצא". אם באמת אין שום התאמה (גם לא בתעתיק) — תגידי זאת בפירוש ושאלי למספר, אל תמשיכי בכלי עם מידע מומצא.
 - "כמה התאמות" נמדד לפי **מספרי טלפון שונים**, לא לפי מספר שורות/הודעות. לקוח אחד שכתב 20 הודעות מופיע כ-20 שורות ב-get_context עם **אותו** מספר טלפון (from) — זו התאמה אחת ברורה, לא כמה לקוחות. רק אם באמת יש שני מספרי טלפון שונים עם שם דומה (למשל "אבי" ו"אבי מנהל במימון כל", שני from שונים) — זו אי-בהירות אמיתית. במקרה כזה בלבד: אל תנחש ואל תמשיך לקרוא get_context שוב, עצור מיד ושאל שאלה אחת ממוקדת (מספר טלפון) והמתן לתשובה — אל תבצע אף כלי עד שיובהר.
 - שמור כללים ל-permanent memory כשהמשתמשת אומרת "מעכשיו תמיד" / "אל תעשי יותר".
-- "תשלח לו את (כל) התמונות" (בלי מספר ID ספציפי בהודעה עצמה): קרא get_context(kind=pendingImages) וקבל את כל ה-mediaId שהצטברו, והעבר את כולם ב-imageMediaIds אחד ל-send_image_to_customer — לא קריאה נפרדת לכל תמונה.
+- "תשלח לו את (כל) התמונות" (בלי מספר ID ספציפי בהודעה עצמה): קרא get_context(kind=pendingImages) וקבל את כל ה-mediaId שהצטברו, והעבר את כולם ב-imageMediaIds אחד ל-send_image_to_customer — לא קריאה נפרדת לכל תמונה. **לעולם אל תרכיב imageMediaIds מתוך מה שאת/ה "רואה" בהודעות קודמות בשיחה — ה-ID האמיתי מוסתר משם בכוונה** (יכול להיות שהצטברו יותר תמונות ממה שנכנס לחלון ההיסטוריה שאת/ה רואה) — get_context(kind=pendingImages) הוא המקור היחיד האמין למספר האמיתי ולכל ה-ID-ים.
 - בקשה לשלוח/לחזור ללקוח לפי שם: קרא get_context(kind=messages) **לפני** כל ניסיון שליחה, כדי למצוא את ה-messageId האמיתי שלו — כולל הודעות שכבר נענו (חזרה עם תשובה אמיתית אחרי אישור אוטומטי היא המקרה הנפוץ ביותר). רק אם הלקוח לא מופיע שם בכלל — reach_out_to_customer.
 - אם המשתמשת מאשרת/דוחה משהו במילים שלה ("מאשרת", "כן תמחק אותה", "סבבה", "לא, תעזוב") ולא במילה המדויקת "אשר"/"דחה" — בדקי get_context(kind=approvals): אם יש אישור ממתין רלוונטי, החליטי עליו עם decide_approval לפי ה-approvalId שלו. אל תיצרי request_approval נוסף לאותו דבר (זה יוצר כפילויות), ולעולם אל תגידי שאין לך יכולת לבצע פעולה כשיש אישור ממתין רלוונטי — זה תמיד שקר.
 
@@ -210,10 +210,22 @@ async function llmOrchestrate(
     timezone: ctx.timezone,
   });
 
+  // Strip raw imageMediaId="..." tags from OLDER turns before they reach the
+  // model. Without this, a batch of accumulated photos (see owner-commands.ts
+  // — each one is its own row) partially survives into this trimmed window,
+  // and the model reads the IDs it happens to still see here instead of
+  // calling get_context(kind=pendingImages) for the full, deduped set — which
+  // is exactly how "send all the photos" silently sent only however many fit
+  // in the last 9 prior turns instead of everything accumulated. The current
+  // turn's own freshly-attached photo (built in owner-commands.ts) is left
+  // untouched — acting on that one directly, by its real id, is correct.
   const priorTurns = (await getMessages(ctx.conversationId))
     .filter((m) => m.role === "user" || m.role === "assistant")
     .slice(-10, -1)
-    .map<ChatMessage>((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+    .map<ChatMessage>((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content.replace(/imageMediaId="[^"]+"/g, 'imageMediaId="(ראה get_context kind=pendingImages)"'),
+    }));
 
   const messages: ChatMessage[] = [...priorTurns, { role: "user", content: message }];
 

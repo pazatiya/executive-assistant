@@ -18,6 +18,7 @@ export interface InboxMessage {
   status: string;
   draftReply: string | null;
   receivedAt: string;
+  mediaId: string | null;
 }
 
 const CLS: Record<string, string> = {
@@ -195,6 +196,14 @@ export function CustomerInbox({ messages }: { messages: InboxMessage[] }) {
                     <span className={`rounded px-1.5 py-0.5 text-[11px] ${st.cls}`}>{st.label}</span>
                   </div>
                   <p className={`mt-0.5 text-sm ${open ? "" : "line-clamp-1"} text-muted-foreground`}>{m.text}</p>
+                  {m.mediaId && (
+                    // eslint-disable-next-line @next/next/no-img-element -- proxied Meta media, not a static asset
+                    <img
+                      src={`/api/whatsapp/media/${m.mediaId}`}
+                      alt="תמונה מהלקוח"
+                      className={`mt-2 rounded-lg border object-cover ${open ? "max-h-80" : "h-16 w-16"}`}
+                    />
+                  )}
                 </div>
                 <span className="shrink-0 text-[11px] text-muted-foreground">{timeAgo(m.receivedAt)}</span>
               </button>

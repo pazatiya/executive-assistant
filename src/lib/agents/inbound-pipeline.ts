@@ -80,6 +80,7 @@ export async function ingestWhatsAppMessage(msg: InboundMessage | null): Promise
     text: msg.text,
     receivedAt: msg.receivedAt,
     source: "live",
+    mediaId: msg.mediaId ?? null,
   });
 
   const triage = await triageMessage({

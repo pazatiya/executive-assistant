@@ -23,6 +23,7 @@ export interface CreateInboundMessageInput {
   sentiment?: Message["sentiment"];
   priority?: Message["priority"];
   source?: Message["source"];
+  mediaId?: string | null;
 }
 
 export async function findMessageByExternalId(channel: Message["channel"], externalId: string) {
@@ -49,6 +50,7 @@ export async function createInboundMessage(input: CreateInboundMessageInput): Pr
     priority: input.priority ?? "normal",
     status: "new",
     draftReply: null,
+    mediaId: input.mediaId ?? null,
     source: input.source ?? "live",
     createdAt: nowIso(),
     updatedAt: nowIso(),
