@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Sparkles } from "lucide-react";
+import Image from "next/image";
 import { DEV_USERS } from "@/lib/auth";
 import { env } from "@/lib/env";
 
@@ -37,8 +37,16 @@ export default async function LoginPage({
         className="w-full max-w-sm space-y-6 rounded-[1.5rem] border bg-card/95 p-6 text-center shadow-2xl shadow-slate-900/10 backdrop-blur sm:p-8"
       >
         <div>
-          <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-[#7b69eb] text-white shadow-lg shadow-primary/25">
-            <Sparkles className="size-5" />
+          <div className="relative mx-auto mb-1 h-28 w-32">
+            <div className="absolute inset-x-5 bottom-2 h-7 rounded-full bg-primary/15 blur-xl" />
+            <Image
+              src="/visuals/ai-secretary-mascot.webp"
+              alt="המזכירה — דמות AI לא אנושית"
+              width={1214}
+              height={1295}
+              priority
+              className="relative h-full w-full object-contain drop-shadow-xl"
+            />
           </div>
           <h1 className="text-2xl font-bold tracking-tight">ברוכים הבאים למזכירה</h1>
           <p className="mt-1.5 text-sm text-muted-foreground">בחרו משתמש כדי להיכנס לסביבת העבודה</p>

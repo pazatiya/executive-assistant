@@ -1,8 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Sparkles, Plus, ShieldCheck, CheckSquare, Bell, Wrench, Paperclip, X, FileText, Loader2 } from "lucide-react";
+import { Send, Plus, ShieldCheck, CheckSquare, Bell, Wrench, Paperclip, X, FileText, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { cn, timeAgo } from "@/lib/utils";
@@ -168,20 +169,27 @@ export function AssistantChat({
       <div className="flex flex-1 flex-col overflow-hidden">
         <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-6">
           {messages.length === 0 && (
-            <div className="mx-auto max-w-xl pt-10 text-center">
-              <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                <Sparkles className="size-6" />
+            <div className="mx-auto max-w-xl pt-4 text-center sm:pt-8">
+              <div className="relative mx-auto h-36 w-40">
+                <div className="absolute inset-x-5 bottom-2 h-8 rounded-full bg-primary/15 blur-xl" />
+                <Image
+                  src="/visuals/ai-secretary-mascot.webp"
+                  alt="המזכירה — דמות AI לא אנושית"
+                  width={1214}
+                  height={1295}
+                  className="relative h-full w-full object-contain drop-shadow-xl"
+                />
               </div>
-              <h2 className="mt-3 text-lg font-semibold">מה נעשה ב-{workspaceName}?</h2>
+              <h2 className="mt-1 text-xl font-extrabold tracking-tight">מה מסדרים היום?</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                אני מבצעת מה שאפשר אוטומטית ומעלה לאישור כל פעולה כלפי חוץ.
+                אני מסדרת את {workspaceName}, מבצעת מה שאפשר ומעלה לאישור כל פעולה כלפי חוץ.
               </p>
               <div className="mt-5 grid gap-2 sm:grid-cols-2">
                 {SUGGESTIONS.map((s) => (
                   <button
                     key={s}
                     onClick={() => send(s)}
-                    className="rounded-lg border p-3 text-right text-sm transition-colors hover:border-primary/40"
+                    className="rounded-xl border bg-card/80 p-3.5 text-right text-sm font-medium shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
                   >
                     {s}
                   </button>

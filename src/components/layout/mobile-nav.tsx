@@ -32,11 +32,9 @@ export function MobileNav({ counts }: { counts: Record<string, number> }) {
           <aside className="absolute inset-y-0 right-0 flex w-[310px] max-w-[88vw] flex-col overflow-y-auto bg-[#17182a] p-4 text-white shadow-2xl">
             <div className="flex items-center justify-between px-2 py-3">
               <div className="flex items-center gap-2">
-                <img
-                  src="/assistant-avatar-head.png"
-                  alt="המזכירה"
-                  className="size-10 shrink-0 rounded-2xl object-cover"
-                />
+                <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-[#332c57] to-[#201d35]">
+                  <img src="/visuals/ai-secretary-mascot.webp" alt="המזכירה" className="size-12 max-w-none object-contain" />
+                </div>
                 <div className="leading-tight">
                   <div className="text-sm font-bold">המזכירה</div>
                   <div className="mt-1 text-[11px] text-white/45">העוזרת האישית של DALOR</div>
@@ -68,10 +66,10 @@ export function MobileNav({ counts }: { counts: Record<string, number> }) {
                         href={item.href}
                         className={cn(
                           "flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors",
-                          active ? "bg-white/10 font-semibold text-white" : "text-white/60 hover:bg-white/[0.06] hover:text-white",
+                          active ? "bg-gradient-to-l from-[#c89a39]/30 to-white/[0.06] font-semibold text-white" : "text-white/60 hover:bg-white/[0.06] hover:text-white",
                         )}
                       >
-                        <item.icon className={cn("size-4 shrink-0", active && "text-[#a99cff]")} />
+                        <item.icon className={cn("size-4 shrink-0", active && "text-[#e7bd5b]")} />
                         <span className="flex-1">{item.label}</span>
                         {count > 0 && <span className="rounded-full bg-[#e3b752] px-2 py-0.5 text-[10px] font-bold text-[#30240b]">{count}</span>}
                       </Link>

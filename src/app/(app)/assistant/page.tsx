@@ -13,7 +13,7 @@ export default async function AssistantPage() {
     <div className="flex h-full flex-col">
       <PageHeader
         title="המזכירה"
-        description={`workspace פעיל: ${activeWorkspace.name} · כתבי מה לעשות ואבצע ואעלה לאישור מה שצריך`}
+        description={`סביבת העבודה הפעילה: ${activeWorkspace.name} · כתבו מה לעשות — ואבצע או אעביר לאישור בהתאם`}
       />
       <AssistantChat
         conversations={conversations.map((c) => ({ id: c.id, title: c.title, at: c.lastMessageAt }))}

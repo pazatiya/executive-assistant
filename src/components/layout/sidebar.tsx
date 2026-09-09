@@ -12,11 +12,9 @@ export function Sidebar({ counts }: { counts: Record<string, number> }) {
     <aside className="relative hidden w-[272px] shrink-0 flex-col overflow-hidden border-l border-white/10 bg-[#17182a] p-4 text-white md:flex">
       <div className="pointer-events-none absolute -right-24 -top-24 size-60 rounded-full bg-primary/25 blur-3xl" />
       <div className="relative flex items-center gap-3 px-2 pb-5 pt-2">
-        <img
-          src="/assistant-avatar-head.png"
-          alt="המזכירה"
-          className="size-10 shrink-0 rounded-2xl object-cover shadow-lg shadow-violet-950/30"
-        />
+        <div className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-[#332c57] to-[#201d35] shadow-lg shadow-black/30">
+          <img src="/visuals/ai-secretary-mascot.webp" alt="המזכירה" className="size-12 max-w-none object-contain" />
+        </div>
         <div className="leading-tight">
           <div className="text-[15px] font-bold tracking-tight">המזכירה</div>
           <div className="mt-1 text-[11px] text-white/45">העוזרת האישית של DALOR</div>
@@ -48,11 +46,11 @@ export function Sidebar({ counts }: { counts: Record<string, number> }) {
                     className={cn(
                       "group flex items-center gap-3 rounded-xl px-3 py-2 text-[13px] transition-all",
                       active
-                        ? "bg-white/[0.11] font-semibold text-white shadow-sm"
+                        ? "bg-gradient-to-l from-[#c89a39]/30 to-white/[0.06] font-semibold text-white shadow-sm"
                         : "text-white/58 hover:bg-white/[0.06] hover:text-white",
                     )}
                   >
-                    <span className={cn("flex size-7 items-center justify-center rounded-lg transition-colors", active ? "bg-primary text-white" : "bg-white/[0.04] group-hover:bg-white/[0.08]")}>
+                    <span className={cn("flex size-7 items-center justify-center rounded-lg transition-colors", active ? "bg-[#d8ac4a] text-[#2d230d]" : "bg-white/[0.04] group-hover:bg-white/[0.08]")}>
                       <item.icon className="size-[15px] shrink-0" />
                     </span>
                     <span className="flex-1">{item.label}</span>
