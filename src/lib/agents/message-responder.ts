@@ -88,7 +88,7 @@ async function ownerHandledRecently(authorHandle: string): Promise<boolean> {
   return rows.some((r) => OWNER_SEND_TOOLS.includes(r.tool ?? ""));
 }
 
-const INTRO_GAP_MS = 12 * 3600_000;
+const INTRO_GAP_MS = 60_000; // TEMP for live testing — revert to 12 * 3600_000
 
 /**
  * Whether to (re-)introduce "כאן ג'ימי מ-DALOR" — not just literally their
