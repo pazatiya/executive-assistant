@@ -1,4 +1,4 @@
-import { and, asc, eq, lte, inArray, type SQL } from "drizzle-orm";
+import { and, asc, eq, isNull, lte, inArray, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { reminders } from "@/lib/db/schema";
 import { id } from "@/lib/ids";
@@ -24,6 +24,22 @@ export interface CreateReminderInput {
 }
 
 export async function createReminder(input: CreateReminderInput): Promise<Reminder> {
+  // Idempotency guard. Gemini sometimes re-emits the same create_reminder tool
+  // call inside one orchestrator run, and a slow webhook can be redelivered by
+  // Meta — both produced two identical reminders seconds apart. If an identical
+  // one (same owner + workspace + title + time) was just created, reuse it.
+  const recent = await db.query.reminders.findFirst({
+    where: and(
+      eq(reminders.userId, input.userId),
+      input.workspaceId ? eq(reminders.workspaceId, input.workspaceId) : isNull(reminders.workspaceId),
+      eq(reminders.title, input.title),
+      eq(reminders.dueAt, input.dueAt),
+    ),
+  });
+  if (recent && Date.now() - new Date(recent.createdAt).getTime() < 5 * 60_000) {
+    return recent;
+  }
+
   const row: Reminder = {
     id: id("rem"),
     userId: input.userId,
