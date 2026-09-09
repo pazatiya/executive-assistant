@@ -12,9 +12,11 @@ export function Sidebar({ counts }: { counts: Record<string, number> }) {
     <aside className="relative hidden w-[272px] shrink-0 flex-col overflow-hidden border-l border-white/10 bg-[#17182a] p-4 text-white md:flex">
       <div className="pointer-events-none absolute -right-24 -top-24 size-60 rounded-full bg-primary/25 blur-3xl" />
       <div className="relative flex items-center gap-3 px-2 pb-5 pt-2">
-        <div className="flex size-10 items-center justify-center rounded-2xl bg-gradient-to-br from-[#8d79ff] to-[#5743d9] text-white shadow-lg shadow-violet-950/30">
-          <Sparkles className="size-[18px]" />
-        </div>
+        <img
+          src="/assistant-avatar-head.png"
+          alt="המזכירה"
+          className="size-10 shrink-0 rounded-2xl object-cover shadow-lg shadow-violet-950/30"
+        />
         <div className="leading-tight">
           <div className="text-[15px] font-bold tracking-tight">המזכירה</div>
           <div className="mt-1 text-[11px] text-white/45">העוזרת האישית של DALOR</div>

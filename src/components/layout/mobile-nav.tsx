@@ -32,9 +32,11 @@ export function MobileNav({ counts }: { counts: Record<string, number> }) {
           <aside className="absolute inset-y-0 right-0 flex w-[310px] max-w-[88vw] flex-col overflow-y-auto bg-[#17182a] p-4 text-white shadow-2xl">
             <div className="flex items-center justify-between px-2 py-3">
               <div className="flex items-center gap-2">
-                <div className="flex size-10 items-center justify-center rounded-2xl bg-primary text-white">
-                  <Sparkles className="size-4" />
-                </div>
+                <img
+                  src="/assistant-avatar-head.png"
+                  alt="המזכירה"
+                  className="size-10 shrink-0 rounded-2xl object-cover"
+                />
                 <div className="leading-tight">
                   <div className="text-sm font-bold">המזכירה</div>
                   <div className="mt-1 text-[11px] text-white/45">העוזרת האישית של DALOR</div>
