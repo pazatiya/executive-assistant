@@ -88,14 +88,27 @@ async function ownerHandledRecently(authorHandle: string): Promise<boolean> {
   return rows.some((r) => OWNER_SEND_TOOLS.includes(r.tool ?? ""));
 }
 
+const INTRO_GAP_MS = 12 * 3600_000;
+
+/**
+ * Whether to (re-)introduce "כאן ג'ימי מ-DALOR" — not just literally their
+ * first-ever message, but also true again if it's been 12+ hours since they
+ * last wrote in. A customer who messaged two days ago and comes back today
+ * is starting a fresh conversation in every way that matters; skipping the
+ * intro because a row exists from days ago read as never having said hello.
+ */
 async function isFirstContact(channel: Message["channel"], authorHandle: string): Promise<boolean> {
   const rows = await db
-    .select({ id: messages.id })
+    .select({ receivedAt: messages.receivedAt })
     .from(messages)
     .where(and(eq(messages.channel, channel), eq(messages.authorHandle, authorHandle)))
     .orderBy(desc(messages.receivedAt))
     .limit(2);
-  return rows.length <= 1;
+  // rows[0] is the message just received (already inserted by the time this
+  // runs); rows[1], if any, is the one before it — the real "last contact".
+  const previous = rows[1];
+  if (!previous) return true;
+  return Date.now() - new Date(previous.receivedAt).getTime() > INTRO_GAP_MS;
 }
 
 async function factsBlock(userId: string, workspaceId: string | null): Promise<string> {
