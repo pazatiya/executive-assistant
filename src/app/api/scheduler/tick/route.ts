@@ -23,7 +23,7 @@ function authorized(req: Request): boolean {
 
 /**
  * The single heartbeat. Render's cron hits this every ~5 minutes.
- * Runs: due reminders + owner briefs (morning / midday / evening).
+ * Runs: due reminders + owner briefs (morning / evening).
  */
 export async function POST(req: Request) {
   if (!authorized(req)) return new Response("unauthorized", { status: 401 });

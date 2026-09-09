@@ -3,26 +3,26 @@
 @tailwind utilities;
 
 /*
- * A calm, high-contrast workspace: warm canvas, crisp surfaces and a deep
- * indigo action colour. Gold remains as a quiet DALOR brand accent.
+ * DALOR "Executive Atelier" — tactile paper, midnight ink, violet and gold.
+ * The direction was developed from project-specific DALL·E UI studies.
  */
 :root {
   --font-sans: "Assistant", "Rubik", -apple-system, "Segoe UI", sans-serif;
 
-  --background: 225 33% 97%;
-  --foreground: 225 28% 16%;
-  --card: 0 0% 100%;
-  --card-foreground: 225 28% 16%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 225 28% 16%;
+  --background: 42 33% 96%;
+  --foreground: 242 31% 12%;
+  --card: 45 55% 99%;
+  --card-foreground: 242 31% 12%;
+  --popover: 45 55% 99%;
+  --popover-foreground: 242 31% 12%;
 
   --primary: 249 58% 48%;
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 228 31% 94%;
-  --secondary-foreground: 225 24% 24%;
-  --muted: 225 28% 95%;
-  --muted-foreground: 224 13% 46%;
+  --secondary: 39 25% 94%;
+  --secondary-foreground: 242 24% 23%;
+  --muted: 40 22% 94%;
+  --muted-foreground: 241 10% 45%;
 
   --accent: 39 76% 92%;
   --accent-foreground: 30 66% 28%;
@@ -34,10 +34,10 @@
   --warning: 36 86% 52%;
   --warning-foreground: 28 60% 17%;
 
-  --border: 225 24% 90%;
-  --input: 225 20% 86%;
+  --border: 38 24% 86%;
+  --input: 38 20% 82%;
   --ring: 249 58% 48%;
-  --radius: 1rem;
+  --radius: 1.1rem;
 
   --gold: 39 64% 55%;
   --gold-bright: 40 72% 61%;
@@ -59,14 +59,14 @@ body {
 
 ::selection { background: hsl(var(--primary) / 0.16); color: hsl(var(--foreground)); }
 ::-webkit-scrollbar { width: 7px; height: 7px; }
-::-webkit-scrollbar-thumb { background: hsl(225 14% 78%); border-radius: 999px; }
+::-webkit-scrollbar-thumb { background: hsl(39 13% 75%); border-radius: 999px; }
 ::-webkit-scrollbar-track { background: transparent; }
 
 .card-surface {
-  background: hsl(var(--card) / 0.94);
+  background: hsl(var(--card) / 0.965);
   border: 1px solid hsl(var(--border));
   border-radius: var(--radius);
-  box-shadow: 0 1px 2px hsl(225 30% 20% / 0.025), 0 10px 30px hsl(225 30% 20% / 0.035);
+  box-shadow: 0 1px 2px hsl(242 30% 15% / 0.025), 0 12px 32px hsl(32 20% 20% / 0.045);
 }
 
 .risk-green { color: hsl(154 58% 29%); background: hsl(var(--success) / 0.1); }
@@ -79,9 +79,221 @@ body {
 
 .app-canvas {
   background:
-    radial-gradient(circle at 15% 0%, hsl(var(--primary) / 0.055), transparent 27rem),
-    radial-gradient(circle at 85% 12%, hsl(var(--gold) / 0.06), transparent 24rem),
+    radial-gradient(circle at 8% 0%, hsl(var(--primary) / 0.045), transparent 29rem),
+    radial-gradient(circle at 88% 12%, hsl(var(--gold) / 0.075), transparent 27rem),
+    repeating-linear-gradient(115deg, transparent 0 18px, hsl(35 18% 70% / 0.013) 18px 19px),
     hsl(var(--background));
+}
+
+.dashboard-hero {
+  position: relative;
+  min-height: 268px;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: 1.55rem;
+  background-color: #f7f4ee;
+  background-image: url("/visuals/executive-atelier-hero.webp");
+  background-position: center;
+  background-size: cover;
+  box-shadow: 0 20px 55px hsl(35 24% 20% / 0.08);
+  isolation: isolate;
+}
+
+.dashboard-hero-wash {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(90deg, transparent 0 32%, hsl(42 45% 97% / 0.58) 48%, hsl(42 45% 97% / 0.94) 68%);
+}
+
+.dashboard-mascot {
+  position: absolute;
+  bottom: -46px;
+  left: 10.5%;
+  z-index: 2;
+  width: 250px;
+  height: auto;
+  filter: drop-shadow(0 18px 20px rgb(22 18 43 / 0.18));
+}
+
+.editorial-kicker {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: hsl(241 12% 44%);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.015em;
+}
+
+.editorial-kicker > span {
+  display: inline-block;
+  width: 1.75rem;
+  height: 1px;
+  background: #c79832;
+}
+
+.metrics-ribbon {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border));
+  border-radius: 1.25rem;
+  background: hsl(var(--border));
+  box-shadow: 0 12px 32px hsl(35 24% 20% / 0.045);
+}
+
+.metric-module {
+  display: flex;
+  min-width: 0;
+  min-height: 102px;
+  align-items: center;
+  gap: 0.85rem;
+  background: hsl(var(--card));
+  padding: 1rem 1.1rem;
+  transition: background-color 180ms ease;
+}
+
+.metric-module:hover { background: #fbf8f2; }
+
+.metric-icon {
+  display: flex;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.9rem;
+}
+
+.metric-icon-violet { background: #efecff; color: #5743d9; }
+.metric-icon-gold { background: #f8f0dd; color: #a97718; }
+.metric-icon-blue { background: #edf5fb; color: #3f83aa; }
+.metric-icon-sage { background: #ebf6ef; color: #438664; }
+
+.focus-panel {
+  position: relative;
+  min-height: 440px;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 1.45rem;
+  color: white;
+  background:
+    radial-gradient(circle at 78% 0%, rgb(99 74 214 / 0.2), transparent 32%),
+    linear-gradient(145deg, #1b1931, #11111f 72%);
+  box-shadow: 0 20px 50px rgb(22 20 44 / 0.18);
+}
+
+.decision-ribbons {
+  position: absolute;
+  inset: -12% auto -18% -8%;
+  width: 47%;
+  transform: rotate(-5deg);
+}
+
+.decision-ribbons i {
+  position: absolute;
+  left: 0;
+  display: block;
+  width: 108%;
+  height: 31%;
+  border: 1px solid rgb(216 172 74 / 0.68);
+  border-left: 0;
+  border-radius: 0 3rem 3rem 0;
+  background: linear-gradient(100deg, rgb(77 66 139 / 0.12), rgb(255 255 255 / 0.025));
+  box-shadow: inset -18px 0 35px rgb(87 67 217 / 0.09);
+}
+
+.decision-ribbons i:nth-child(1) { top: 3%; }
+.decision-ribbons i:nth-child(2) { top: 25%; left: -7%; }
+.decision-ribbons i:nth-child(3) { top: 47%; left: -14%; }
+.decision-ribbons i:nth-child(4) { top: 69%; left: -21%; }
+
+.timeline-card { background: linear-gradient(150deg, #fffefa, #fbf7ef); }
+
+.focus-flow {
+  position: relative;
+  padding-right: 1.25rem;
+}
+
+.focus-flow::before {
+  content: "";
+  position: absolute;
+  top: 1.1rem;
+  bottom: 1.1rem;
+  right: 0.38rem;
+  width: 1px;
+  background: linear-gradient(#d8ac4a, #ead9ad);
+}
+
+.focus-flow-item {
+  position: relative;
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  gap: 0.85rem;
+  border-radius: 1rem;
+  padding: 0.75rem 1rem 0.75rem 0.75rem;
+}
+
+.focus-flow-item.is-active { background: linear-gradient(90deg, #f2efff, #faf8ff); color: #4631c7; }
+
+.focus-flow-node {
+  position: absolute;
+  right: -1.18rem;
+  z-index: 1;
+  display: flex;
+  width: 1rem;
+  height: 1rem;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #c49328;
+  border-radius: 999px;
+  background: #fffefa;
+}
+
+.focus-flow-node.is-current { width: 1.35rem; height: 1.35rem; right: -1.35rem; border-color: #5743d9; background: #5743d9; box-shadow: 0 0 0 7px rgb(87 67 217 / 0.1); }
+.focus-flow-node.is-done { width: 1.35rem; height: 1.35rem; right: -1.35rem; border-color: #6fba91; background: #6fba91; color: white; }
+
+@media (max-width: 1023px) {
+  .decision-ribbons { opacity: 0.35; width: 58%; }
+}
+
+@media (max-width: 639px) {
+  .dashboard-hero {
+    min-height: 370px;
+    background-position: left top;
+    background-size: auto 68%;
+    background-repeat: no-repeat;
+  }
+
+  .dashboard-hero-wash {
+    background: linear-gradient(180deg, transparent 0 34%, hsl(42 45% 97% / 0.88) 54%, hsl(42 45% 97%) 72%);
+  }
+
+  .dashboard-mascot {
+    top: 2px;
+    bottom: auto;
+    left: 8px;
+    width: 145px;
+  }
+
+  .metrics-ribbon {
+    display: flex;
+    scroll-snap-type: x mandatory;
+    overflow-x: auto;
+    border-radius: 1.15rem;
+  }
+
+  .metric-module {
+    min-width: 76vw;
+    min-height: 96px;
+    scroll-snap-align: start;
+  }
+
+  .focus-panel { min-height: 500px; }
+  .decision-ribbons { inset: auto auto -4% -18%; width: 83%; height: 46%; opacity: 0.45; }
 }
 
 .soft-grid {

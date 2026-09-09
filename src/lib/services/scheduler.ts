@@ -9,19 +9,19 @@ import { notifications, users } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { DEV_USERS } from "@/lib/auth";
 import { myWorkspaceIds } from "@/lib/auth/scope";
-import { buildMorningBrief, buildMiddayBrief, buildEndOfDayBrief } from "./brief";
+import { buildMorningBrief, buildEndOfDayBrief } from "./brief";
 import { notify } from "./notifications";
 import { logActivity } from "./activity";
 
-type BriefKind = "morning" | "midday" | "eod";
+// Owners asked for two briefs a day only — morning and evening, no midday.
+type BriefKind = "morning" | "eod";
 
 const PREF_KEY: Record<BriefKind, string> = {
   morning: "morningBriefAt",
-  midday: "middayBriefAt",
   eod: "endOfDayBriefAt",
 };
-const DEFAULT_AT: Record<BriefKind, string> = { morning: "07:30", midday: "13:30", eod: "18:30" };
-const LABEL: Record<BriefKind, string> = { morning: "סיכום בוקר", midday: "עדכון צהריים", eod: "סיכום ערב" };
+const DEFAULT_AT: Record<BriefKind, string> = { morning: "07:30", eod: "18:30" };
+const LABEL: Record<BriefKind, string> = { morning: "סיכום בוקר", eod: "סיכום ערב" };
 
 /** "HH:MM" and "YYYY-MM-DD" in the app timezone. */
 function localParts(now = new Date()): { hm: string; date: string; minutes: number } {
@@ -78,20 +78,6 @@ function fmtMorning(b: Awaited<ReturnType<typeof buildMorningBrief>>): string {
   return L.join("\n");
 }
 
-function fmtMidday(b: Awaited<ReturnType<typeof buildMiddayBrief>>): string {
-  const L: string[] = ["🕐 *עדכון צהריים*"];
-  if (b.newSinceMorning.length)
-    L.push(
-      `\n📨 נכנס מהבוקר (${b.newSinceMorning.length}):\n` +
-        b.newSinceMorning.slice(0, 6).map((m) => `• ${m.from}: ${m.text}`).join("\n"),
-    );
-  if (b.waitingApprovals.length)
-    L.push("\n✅ ממתין לאישור:\n" + b.waitingApprovals.map((a) => `• ${a.title}`).join("\n"));
-  if (b.awaitingReply.length) L.push(`\n💬 ${b.awaitingReply.length} הודעות בלי מענה`);
-  if (L.length === 1) L.push("\nשקט יחסי — הכול מטופל 🙂");
-  return L.join("\n");
-}
-
 function fmtEod(b: Awaited<ReturnType<typeof buildEndOfDayBrief>>): string {
   const L: string[] = ["🌙 *סיכום ערב*"];
   if (b.completed.length) L.push(`\n✔️ נסגר היום (${b.completed.length}):\n` + b.completed.slice(0, 8).map((t) => `• ${t.title}`).join("\n"));
@@ -106,7 +92,6 @@ function fmtEod(b: Awaited<ReturnType<typeof buildEndOfDayBrief>>): string {
 async function briefTextFor(userId: string, kind: BriefKind): Promise<string> {
   // "personal" business context: pass no workspaceId → cross-workspace scope
   if (kind === "morning") return fmtMorning(await buildMorningBrief(userId));
-  if (kind === "midday") return fmtMidday(await buildMiddayBrief(userId));
   return fmtEod(await buildEndOfDayBrief(userId));
 }
 
@@ -128,7 +113,7 @@ export async function runDueBriefs(now = new Date()): Promise<BriefRunResult[]> 
     if (!(await myWorkspaceIds(u.id)).length) continue;
     const prefs = (u.preferences ?? {}) as Record<string, string>;
 
-    for (const kind of ["morning", "midday", "eod"] as BriefKind[]) {
+    for (const kind of ["morning", "eod"] as BriefKind[]) {
       const at = prefs[PREF_KEY[kind]] || DEFAULT_AT[kind];
       const dueMin = toMinutes(at);
       // fire within a 90-min window after the target time (covers cron gaps)
