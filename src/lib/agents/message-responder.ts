@@ -25,9 +25,10 @@ const AUTO_SEND_INTENTS = new Set([
 
 const HOLDING = "קיבלתי 🙏 בודק ומחזיר לך תשובה עוד מעט.";
 const WELCOME =
-  "היי! 🙂 כאן ג'ימי מ-DALOR — מספרה וחנות בגדים לגבר.\n" +
-  "אפשר לשאול על שעות פתיחה, כתובת, מחירים, לתאם תור, או לשאול על בגדים.\n" +
-  'רוצה לדבר עם נציג? פשוט כתוב "נציג".';
+  "היי 👋 כאן ג'ימי, נציג השירות של DALOR.\n" +
+  "צריך לקבוע תור, לבדוק מחיר, שעות פתיחה, כתובת או לשאול על בגדים? אני כאן בשבילך.\n" +
+  "איך אפשר לעזור לך?\n" +
+  'אם תרצה לדבר עם נציג אנושי, פשוט כתוב "נציג".';
 // customer wants a human — we ack and flag it, never keep chatting
 const HANDOFF = "קיבלתי 🙏 העברתי את הפנייה שלך לנציג שירות, נחזור אליך בקרוב.";
 // clothing / product / order questions — iron rule, always check with the store
@@ -138,7 +139,10 @@ async function composeDraft(
 
   // ── bare greeting → a warm welcome ───────────────────────────────
   if (triage.intent === "greeting") {
-    return { text: withIntro ? WELCOME : "היי! 🙂 במה אפשר לעזור? (שעות, כתובת, מחירים, תור, בגדים)", grounded: true };
+    return {
+      text: withIntro ? WELCOME : "היי 🙂 איך אפשר לעזור? תור, מחיר, שעות, כתובת או בגדים.",
+      grounded: true,
+    };
   }
 
   // ── wants a human → ack + hand off ──────────────────────────────
