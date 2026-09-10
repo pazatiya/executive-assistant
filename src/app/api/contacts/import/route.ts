@@ -1,16 +1,24 @@
+import { and, eq } from "drizzle-orm";
 import { apiContext, bad, ok } from "@/lib/api";
+import { db } from "@/lib/db";
+import { workspaces } from "@/lib/db/schema";
 import { parseVCards } from "@/lib/contacts/vcard";
 import { importContacts } from "@/lib/services/contacts";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Upload a .vcf (vCard) export from a phone / Google Contacts. Everything lands
- * in the caller's active workspace — for a personal workspace that keeps the
- * address book private to that owner (scope.ts), which is the point.
+ * Upload a .vcf (vCard) export from a phone / Google Contacts. A phone address
+ * book is personal, so it always lands in the caller's *personal* workspace
+ * (not whatever workspace is on screen) — scope.ts then keeps it private to
+ * them, which is the whole point.
  */
 export async function POST(req: Request) {
-  const { user, workspaceId } = await apiContext(req);
+  const { user, workspaceId: activeWs } = await apiContext(req);
+  const personal = await db.query.workspaces.findFirst({
+    where: and(eq(workspaces.ownerId, user.id), eq(workspaces.type, "personal")),
+  });
+  const workspaceId = personal?.id ?? activeWs;
 
   const form = await req.formData().catch(() => null);
   const file = form?.get("file");
