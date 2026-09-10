@@ -56,7 +56,7 @@ export const env = {
   // outside the 24h window, so it must go as an approved template ({{1}}=name, {{2}}=time)
   metaReminderTemplate: get("META_WA_REMINDER_TEMPLATE", "appointment_reminder"),
   // free-form owner→customer message outside the 24h window: {{1}}=name, {{2}}=body
-  metaOwnerMessageTemplate: get("META_WA_OWNER_MESSAGE_TEMPLATE", "owner_message"),
+  metaOwnerMessageTemplate: get("META_WA_OWNER_MESSAGE_TEMPLATE", "customer_reply"),
   metaTemplateLang: get("META_WA_TEMPLATE_LANG", "he"),
   // customer messages land on יאיר's line; resolve owner + business workspace
   whatsappOwnerEmail: get("WHATSAPP_OWNER_EMAIL", "yair@dalor.co.il"),
