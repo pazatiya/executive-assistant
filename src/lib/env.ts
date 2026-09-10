@@ -52,6 +52,9 @@ export const env = {
   metaGraphVersion: get("META_GRAPH_VERSION", "v21.0"),
   // template used to open a conversation with a customer who wrote to a private line
   metaOutreachTemplate: get("META_WA_OUTREACH_TEMPLATE", "customer_outreach"),
+  // template for the pre-appointment reminder — business-initiated, almost always
+  // outside the 24h window, so it must go as an approved template ({{1}}=name, {{2}}=time)
+  metaReminderTemplate: get("META_WA_REMINDER_TEMPLATE", "appointment_reminder"),
   metaTemplateLang: get("META_WA_TEMPLATE_LANG", "he"),
   // customer messages land on יאיר's line; resolve owner + business workspace
   whatsappOwnerEmail: get("WHATSAPP_OWNER_EMAIL", "yair@dalor.co.il"),

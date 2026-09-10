@@ -192,11 +192,19 @@ export async function sendViaMeta(to: string, text: string) {
  * `bodyParams` fill the template's {{1}}, {{2}}… in order.
  */
 export async function sendMetaTemplate(to: string, bodyParams: string[] = []) {
+  return sendMetaTemplateNamed(env.metaOutreachTemplate, to, bodyParams);
+}
+
+/**
+ * Send any approved template by name. `bodyParams` fill {{1}}, {{2}}… in order.
+ * Meta rejects an empty/blank body parameter, so callers must pass real values.
+ */
+export async function sendMetaTemplateNamed(name: string, to: string, bodyParams: string[] = []) {
   return postMessage({
     to: chatIdToNumber(to),
     type: "template",
     template: {
-      name: env.metaOutreachTemplate,
+      name,
       language: { code: env.metaTemplateLang },
       ...(bodyParams.length
         ? { components: [{ type: "body", parameters: bodyParams.map((t) => ({ type: "text", text: t })) }] }

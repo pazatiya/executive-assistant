@@ -11,6 +11,7 @@ import { activityLogs } from "@/lib/db/schema";
 import { env } from "@/lib/env";
 import { listAppointments } from "@/lib/integrations/dalor-barber";
 import { sendWhatsApp } from "@/lib/integrations/whatsapp-send";
+import { metaWaConfigured, sendMetaTemplateNamed } from "@/lib/integrations/meta-whatsapp";
 import { resolveWhatsAppTarget } from "@/lib/integrations/whatsapp-context";
 import { logActivity } from "./activity";
 
@@ -87,11 +88,18 @@ export async function runAppointmentReminders(now = new Date()): Promise<ApptRem
       continue;
     }
 
-    const first = (a.fullName || "").trim().split(/\s+/)[0];
-    const text =
-      `היי${first ? " " + first : ""}, תזכורת לתור שלך היום ב-${a.time} ב-DALOR ✂️\n` +
-      `אם משהו השתנה — פשוט תכתוב לי כאן ונתאם מחדש. נתראה!`;
-    const r = await sendWhatsApp(a.phone, text);
+    const first = (a.fullName || "").trim().split(/\s+/)[0] || "לקוח יקר";
+    // A reminder for an appointment booked days ago is business-initiated and
+    // outside the 24h service window — Meta only allows an approved template
+    // there (a plain text send fails with error 131047 "Re-engagement message").
+    // The template body already carries the full wording; {{1}}=name, {{2}}=time.
+    const r = metaWaConfigured()
+      ? await sendMetaTemplateNamed(env.metaReminderTemplate, a.phone, [first, a.time])
+      : await sendWhatsApp(
+          a.phone,
+          `היי ${first}, תזכורת לתור שלך היום ב-${a.time} ב-DALOR ✂️\n` +
+            `אם משהו השתנה — פשוט תכתוב לי כאן ונתאם מחדש. נתראה!`,
+        );
 
     await logActivity({
       userId: target.userId,
