@@ -513,10 +513,37 @@ const reach_out_to_customer: ToolFn = async (ctx, input) => {
   };
 };
 
+const message_customer: ToolFn = async (ctx, input) => {
+  const phone = String(input.phone ?? input.to ?? "").trim();
+  const body = String(input.body ?? input.text ?? input.message ?? "").trim();
+  if (!phone) return { ok: false, summary: "צריך מספר טלפון של הלקוח" };
+  if (!body) return { ok: false, summary: "צריך את תוכן ההודעה לשליחה" };
+  if (!looksLikeRealIsraeliMobile(phone)) {
+    return { ok: false, summary: `"${phone}" לא נראה כמו מספר נייד ישראלי אמיתי — אל תמציאי מספר, תשאלי את המשתמשת מה המספר האמיתי.` };
+  }
+  const { messageCustomer } = await import("@/lib/services/messages");
+  const r = await messageCustomer({
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+    phone,
+    body,
+    customerName: input.name ? String(input.name) : undefined,
+  });
+  return {
+    ok: r.ok,
+    summary: r.ok
+      ? `ההודעה נשלחה ל-${phone}${r.via === "meta-template" ? " (כתבנית — מחוץ לחלון 24 שעות)" : ""} — תופיע ב"הודעות"`
+      : `לא הצלחתי: ${r.error}`,
+    agent: "social",
+    target: phone,
+  };
+};
+
 /* ────────────────────────── registry + schemas ────────────────────────── */
 
 export const TOOLS: Record<string, ToolFn> = {
   reach_out_to_customer,
+  message_customer,
   create_task,
   update_task,
   create_reminder,
@@ -785,6 +812,20 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
         name: { type: "string" },
       },
       required: ["phone"],
+    },
+  },
+  {
+    name: "message_customer",
+    description:
+      "שולח הודעה שהמשתמשת ניסחה למספר וואטסאפ של לקוח — למשל 'תשלח ל-050... שהחליפה הגיעה'. עובד גם אם הלקוח לא כתב לבוט לאחרונה: בתוך חלון 24 שעות ההודעה נשלחת כלשונה, ומחוץ לחלון היא נעטפת אוטומטית בתבנית מאושרת (owner_message). קבל phone (חובה), body (תוכן ההודעה, חובה), ו-name (שם הלקוח, אופציונלי). אל תמציאי מספר — אם אין, תשאלי. להשלמת תמונת מצב / תשובה על הודעה קיימת השתמשי ב-send_message_now עם messageId.",
+    parameters: {
+      type: "object",
+      properties: {
+        phone: { type: "string" },
+        body: { type: "string" },
+        name: { type: "string" },
+      },
+      required: ["phone", "body"],
     },
   },
 ];

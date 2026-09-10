@@ -78,7 +78,7 @@ async function recentAutoReplyCount(channel: Message["channel"], authorHandle: s
 // can easily have 60-90 minute gaps between replies while they think it
 // over, and 1 hour was cutting that off mid-conversation).
 const OWNER_HANDLING_WINDOW_MS = 3 * 60 * 60_000;
-const OWNER_SEND_TOOLS = ["send_message_now", "send_image_to_customer", "reach_out_to_customer"];
+const OWNER_SEND_TOOLS = ["send_message_now", "send_image_to_customer", "reach_out_to_customer", "message_customer"];
 async function ownerHandledRecently(authorHandle: string): Promise<boolean> {
   const since = new Date(Date.now() - OWNER_HANDLING_WINDOW_MS).toISOString();
   const rows = await db

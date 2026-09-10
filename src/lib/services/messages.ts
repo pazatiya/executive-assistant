@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, type SQL } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { messages } from "@/lib/db/schema";
 import { id } from "@/lib/ids";
@@ -234,6 +234,78 @@ export async function reachOutToCustomer(input: {
     .update(messages)
     .set({ status: "replied", updatedAt: nowIso() })
     .where(eq(messages.id, row.id));
+  return { ok: true, via, messageId: row.id };
+}
+
+/**
+ * Owner asks the assistant to send a specific message to a customer's number.
+ * Inside the 24h service window a plain text goes out as-is; outside it (a cold
+ * number, or last inbound > 24h ago) Meta only allows an approved template, so
+ * the wording is wrapped in `owner_message` ({{1}}=name, {{2}}=body). Either way
+ * the thread then shows up in the inbox.
+ */
+export async function messageCustomer(input: {
+  userId: string;
+  workspaceId: string | null;
+  phone: string;
+  body: string;
+  customerName?: string;
+}): Promise<{ ok: boolean; via?: string; error?: string; messageId?: string }> {
+  const { normalizeChatId, chatIdToNumber } = await import("@/lib/integrations/waha");
+  const number = chatIdToNumber(normalizeChatId(input.phone));
+  if (number.length < 8) return { ok: false, error: "מספר לא תקין" };
+  const body = input.body.trim();
+  if (!body) return { ok: false, error: "אין תוכן לשליחה" };
+
+  const { metaWaConfigured, sendViaMeta, sendMetaTemplateNamed } = await import("@/lib/integrations/meta-whatsapp");
+  const { sendWhatsApp } = await import("@/lib/integrations/whatsapp-send");
+  const { env } = await import("@/lib/env");
+
+  // Is the customer already inside the 24h window? (a real inbound from them,
+  // not one of our own outbound rows, in the last 24h)
+  const dayAgo = new Date(Date.now() - 24 * 3600_000).toISOString();
+  const recentInbound = await db.query.messages.findFirst({
+    where: and(
+      eq(messages.channel, "whatsapp"),
+      eq(messages.authorHandle, number),
+      eq(messages.source, "live"),
+      gte(messages.receivedAt, dayAgo),
+    ),
+  });
+
+  let via: string;
+  let ok: boolean;
+  let error: string | undefined;
+  if (metaWaConfigured() && !recentInbound) {
+    const r = await sendMetaTemplateNamed(env.metaOwnerMessageTemplate, number, [input.customerName?.trim() || "שלום", body]);
+    ok = r.ok;
+    error = r.error;
+    via = "meta-template";
+  } else if (metaWaConfigured()) {
+    const r = await sendViaMeta(number, body);
+    ok = r.ok;
+    error = r.error;
+    via = "meta-text";
+  } else {
+    const r = await sendWhatsApp(number, body);
+    ok = r.ok;
+    error = r.error;
+    via = r.via;
+  }
+  if (!ok) return { ok: false, via, error: error ?? "שליחה נכשלה" };
+
+  const row = await createInboundMessage({
+    userId: input.userId,
+    workspaceId: input.workspaceId,
+    channel: "whatsapp",
+    kind: "dm",
+    authorHandle: number,
+    authorName: input.customerName ?? null,
+    text: `(הודעה יזומה) ${body}`,
+    classification: "lead",
+    source: "manual",
+  });
+  await db.update(messages).set({ status: "replied", draftReply: body, updatedAt: nowIso() }).where(eq(messages.id, row.id));
   return { ok: true, via, messageId: row.id };
 }
 
