@@ -111,6 +111,36 @@ export async function listContacts(userId: string, opts: { workspaceId?: string 
   return db.select().from(contacts).where(and(...conds)).orderBy(desc(contacts.importance), desc(contacts.updatedAt));
 }
 
+/**
+ * Fuzzy contact lookup for the assistant: the owner says "אמא" and it should
+ * find "אמא היפה שלי". Matches every query word against name / company / notes
+ * (case-insensitive substring), ranks a full-name-word hit above a partial one.
+ */
+export async function searchContacts(
+  userId: string,
+  query: string,
+  opts: { workspaceId?: string; limit?: number } = {},
+) {
+  const all = await listContacts(userId, opts);
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const scored = all
+    .map((c) => {
+      const hay = `${c.name} ${c.company ?? ""} ${c.notes ?? ""}`.toLowerCase();
+      const nameWords = c.name.toLowerCase().split(/\s+/);
+      let score = 0;
+      for (const w of words) {
+        if (nameWords.includes(w)) score += 3;
+        else if (hay.includes(w)) score += 1;
+        else return null;
+      }
+      return { c, score };
+    })
+    .filter((x): x is { c: Contact; score: number } => x !== null)
+    .sort((a, b) => b.score - a.score || a.c.name.length - b.c.name.length);
+  return scored.slice(0, opts.limit ?? 8).map((x) => x.c);
+}
+
 export async function updateContact(userId: string, contactId: string, patch: Partial<Contact>) {
   const c = await db.query.contacts.findFirst({ where: eq(contacts.id, contactId) });
   if (!c || !(await canAccessRow(userId, c))) return null;

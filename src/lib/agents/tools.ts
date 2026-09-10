@@ -388,13 +388,17 @@ const get_context: ToolFn = async (ctx, input) => {
     }));
   }
   if (kind === "contacts" || kind === "overview") {
-    out.contacts = (await listContacts(ctx.userId, {})).map((c) => ({
-      id: c.id,
-      name: c.name,
-      company: c.company,
-      relationship: c.relationshipType,
-      importance: c.importance,
-    }));
+    // The book can hold hundreds of entries — dumping all of them bloats every
+    // overview. Show the important ones; use find_contact to look someone up.
+    const all = await listContacts(ctx.userId, {});
+    out.contacts = all
+      .filter((c) => c.importance === "vip" || c.importance === "high")
+      .slice(0, 40)
+      .map((c) => ({ id: c.id, name: c.name, phone: c.phone, relationship: c.relationshipType, importance: c.importance }));
+    out.contactsTotal = all.length;
+    if (all.length > (out.contacts as unknown[]).length) {
+      out.contactsHint = "יש עוד אנשי קשר — חפשי מישהו ספציפי עם find_contact(query).";
+    }
   }
   return { ok: true, summary: `נטען קונטקסט: ${kind}`, data: out, agent: "research" };
 };
@@ -539,6 +543,29 @@ const message_customer: ToolFn = async (ctx, input) => {
   };
 };
 
+const find_contact: ToolFn = async (ctx, input) => {
+  const query = String(input.query ?? input.name ?? "").trim();
+  if (!query) return { ok: false, summary: "צריך שם או חלק ממנו לחיפוש" };
+  const { searchContacts } = await import("@/lib/services/contacts");
+  const hits = await searchContacts(ctx.userId, query, { limit: 8 });
+  if (!hits.length) return { ok: true, summary: `לא נמצא איש קשר שמתאים ל"${query}"`, data: { contacts: [] }, agent: "research" };
+  return {
+    ok: true,
+    summary: `נמצאו ${hits.length} התאמות ל"${query}"`,
+    data: {
+      contacts: hits.map((c) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        company: c.company,
+        relationship: c.relationshipType,
+        notes: c.notes || undefined,
+      })),
+    },
+    agent: "research",
+  };
+};
+
 const save_contact: ToolFn = async (ctx, input) => {
   const name = String(input.name ?? "").trim();
   if (!name) return { ok: false, summary: "צריך שם לאיש הקשר" };
@@ -571,6 +598,7 @@ const save_contact: ToolFn = async (ctx, input) => {
 export const TOOLS: Record<string, ToolFn> = {
   reach_out_to_customer,
   message_customer,
+  find_contact,
   save_contact,
   create_task,
   update_task,
@@ -840,6 +868,16 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
         name: { type: "string" },
       },
       required: ["phone"],
+    },
+  },
+  {
+    name: "find_contact",
+    description:
+      "מחפש איש קשר בספר של המשתמשת לפי שם או חלק ממנו — לא צריך את השם המלא המדויק. 'אמא' ימצא את 'אמא היפה שלי', 'בעלי' ימצא את 'בעלי הצדיק', 'חלי' ימצא את 'חלי אגמון'. מחזיר שם + טלפון. השתמשי בזה לפני message_customer/create_reminder כשצריך את המספר של מישהו מהאנשי קשר. אם יש כמה התאמות — הציגי אותן ובקשי הבהרה.",
+    parameters: {
+      type: "object",
+      properties: { query: { type: "string" } },
+      required: ["query"],
     },
   },
   {
