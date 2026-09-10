@@ -40,6 +40,8 @@ function decodeValue(rawKey: string, value: string): string {
 function normalizePhone(p: string): string {
   let s = p.replace(/[^\d+]/g, "");
   if (s.startsWith("00")) s = "+" + s.slice(2);
+  // canonicalise Israeli numbers so "050-465-8889" and "+972504658889" match
+  if (/^0\d{8,9}$/.test(s)) s = "+972" + s.slice(1);
   return s;
 }
 
