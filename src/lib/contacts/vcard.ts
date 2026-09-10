@@ -54,7 +54,8 @@ export function parseVCards(text: string): ParsedContact[] {
     const idx = line.indexOf(":");
     if (idx === -1) continue;
     const rawKey = line.slice(0, idx).toUpperCase();
-    const key = rawKey.split(";")[0];
+    // grouped properties come as "item1.TEL", "item2.EMAIL" — drop the group tag
+    const key = rawKey.split(";")[0].replace(/^ITEM\d+\./, "");
     const value = line.slice(idx + 1);
 
     if (key === "BEGIN") {
