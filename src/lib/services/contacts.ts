@@ -47,6 +47,63 @@ export async function createContact(input: CreateContactInput): Promise<Contact>
   return row;
 }
 
+/**
+ * Bulk import from a parsed contacts file (vCard). Idempotent-ish: an existing
+ * contact in the same workspace with a matching phone (or, lacking a phone, a
+ * matching name) is skipped rather than duplicated.
+ */
+export async function importContacts(
+  userId: string,
+  workspaceId: string,
+  people: { name: string; phone?: string; email?: string | null; company?: string | null; note?: string | null }[],
+): Promise<{ added: number; skipped: number }> {
+  const existing = await db
+    .select({ name: contacts.name, phone: contacts.phone })
+    .from(contacts)
+    .where(eq(contacts.workspaceId, workspaceId));
+  const seenPhones = new Set(existing.map((e) => (e.phone ?? "").replace(/\D/g, "")).filter(Boolean));
+  const seenNames = new Set(existing.map((e) => e.name.trim().toLowerCase()).filter(Boolean));
+
+  let added = 0;
+  let skipped = 0;
+  const rows: Contact[] = [];
+  for (const p of people) {
+    const name = p.name?.trim();
+    if (!name) { skipped++; continue; }
+    const digits = (p.phone ?? "").replace(/\D/g, "");
+    if (digits && seenPhones.has(digits)) { skipped++; continue; }
+    if (!digits && seenNames.has(name.toLowerCase())) { skipped++; continue; }
+    if (digits) seenPhones.add(digits);
+    seenNames.add(name.toLowerCase());
+    rows.push({
+      id: id("con"),
+      userId,
+      workspaceId,
+      name,
+      company: p.company ?? null,
+      role: null,
+      email: p.email ?? null,
+      phone: p.phone ?? null,
+      socialHandles: {},
+      relationshipType: "other",
+      importance: "normal",
+      communicationStyle: "",
+      notes: p.note ?? "",
+      openThreads: [],
+      tags: ["יובא"],
+      lastInteractionAt: null,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+    });
+    added++;
+  }
+  // libSQL caps bound params per statement — insert in chunks
+  for (let i = 0; i < rows.length; i += 100) {
+    await db.insert(contacts).values(rows.slice(i, i + 100));
+  }
+  return { added, skipped };
+}
+
 export async function listContacts(userId: string, opts: { workspaceId?: string } = {}) {
   const conds: SQL[] = [
     await listScope({ userId: contacts.userId, workspaceId: contacts.workspaceId }, userId, opts.workspaceId),

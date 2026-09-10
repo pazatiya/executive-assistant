@@ -539,11 +539,39 @@ const message_customer: ToolFn = async (ctx, input) => {
   };
 };
 
+const save_contact: ToolFn = async (ctx, input) => {
+  const name = String(input.name ?? "").trim();
+  if (!name) return { ok: false, summary: "צריך שם לאיש הקשר" };
+  const phone = input.phone ? String(input.phone).trim() : null;
+  const { createContact } = await import("@/lib/services/contacts");
+  const { listContacts } = await import("@/lib/services/contacts");
+  // don't duplicate someone already in the book
+  const existing = await listContacts(ctx.userId, ctx.workspaceId ? { workspaceId: ctx.workspaceId } : {});
+  const digits = (phone ?? "").replace(/\D/g, "");
+  const dup = existing.find(
+    (c) => (digits && (c.phone ?? "").replace(/\D/g, "") === digits) || c.name.trim() === name,
+  );
+  if (dup) return { ok: true, summary: `${name} כבר קיים באנשי הקשר`, agent: "task" };
+  const c = await createContact({
+    userId: ctx.userId,
+    workspaceId: await resolveTargetWorkspaceId(ctx, input.workspace),
+    name,
+    phone,
+    email: input.email ? String(input.email) : null,
+    company: input.company ? String(input.company) : null,
+    role: input.role ? String(input.role) : null,
+    relationshipType: (input.relationshipType as never) ?? "other",
+    notes: input.notes ? String(input.notes) : "",
+  });
+  return { ok: true, summary: `נשמר איש קשר: ${c.name}${phone ? ` (${phone})` : ""}`, target: c.id, agent: "task" };
+};
+
 /* ────────────────────────── registry + schemas ────────────────────────── */
 
 export const TOOLS: Record<string, ToolFn> = {
   reach_out_to_customer,
   message_customer,
+  save_contact,
   create_task,
   update_task,
   create_reminder,
@@ -812,6 +840,24 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
         name: { type: "string" },
       },
       required: ["phone"],
+    },
+  },
+  {
+    name: "save_contact",
+    description:
+      "שומר איש קשר חדש בספר הקשרים של המשתמשת (בסביבה שממנה היא פונה — אישי נשאר פרטי). למשל 'תשמרי שהמספר של רואת החשבון שירן הוא 05...'. קבל name (חובה), phone, email, company, role, relationshipType (client/lead/supplier/partner/family/professional/other), notes.",
+    parameters: {
+      type: "object",
+      properties: {
+        name: { type: "string" },
+        phone: { type: "string" },
+        email: { type: "string" },
+        company: { type: "string" },
+        role: { type: "string" },
+        relationshipType: { type: "string" },
+        notes: { type: "string" },
+      },
+      required: ["name"],
     },
   },
   {

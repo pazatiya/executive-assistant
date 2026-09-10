@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Mail, Phone, Star } from "lucide-react";
+import { Plus, Mail, Phone, Star, Upload, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -34,6 +34,28 @@ export function ContactsPanel({ initial }: { initial: Contact[] }) {
   const [contacts, setContacts] = useState(initial);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", company: "", role: "", email: "", phone: "", relationshipType: "client", importance: "normal" });
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+
+  async function importFile(file: File) {
+    setImporting(true);
+    setImportMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch("/api/contacts/import", { method: "POST", body: fd });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setImportMsg(data?.error ?? "הייבוא נכשל");
+        return;
+      }
+      setImportMsg(`נוספו ${data.added} אנשי קשר${data.skipped ? ` · ${data.skipped} כבר קיימים` : ""}`);
+      router.refresh();
+    } finally {
+      setImporting(false);
+    }
+  }
 
   async function create() {
     if (!form.name.trim()) return;
@@ -51,9 +73,26 @@ export function ContactsPanel({ initial }: { initial: Contact[] }) {
 
   return (
     <div className="space-y-4">
-      <Button size="sm" onClick={() => setOpen((o) => !o)}>
-        <Plus className="size-4" /> איש קשר חדש
-      </Button>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" onClick={() => setOpen((o) => !o)}>
+          <Plus className="size-4" /> איש קשר חדש
+        </Button>
+        <Button size="sm" variant="outline" disabled={importing} onClick={() => fileRef.current?.click()}>
+          {importing ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />} ייבוא מהטלפון (vCard)
+        </Button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".vcf,text/vcard,text/x-vcard"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (f) void importFile(f);
+          }}
+        />
+        {importMsg && <span className="text-xs text-muted-foreground">{importMsg}</span>}
+      </div>
 
       {open && (
         <Card className="grid gap-2 p-4 sm:grid-cols-2">
