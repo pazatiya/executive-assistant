@@ -97,6 +97,27 @@ export async function executeAction(input: ExecuteInput): Promise<ExecuteResult>
         };
       }
 
+      // A message to a phone number that isn't tied to an existing inbox thread
+      // — a personal contact ("בעלי", "אמא") found via find_contact, or a
+      // customer's number given directly. No case existed for this before,
+      // so an approved contact_client action silently had nothing to execute.
+      case "contact_client":
+      case "message_contact": {
+        const phone = payload.phone as string | undefined;
+        const body = (payload.body as string) ?? (payload.text as string) ?? "";
+        if (!phone || !body) return { ok: false, actionType, detail: "", error: "חסר מספר טלפון או תוכן ההודעה" };
+        const { messageCustomer } = await import("./messages");
+        const r = await messageCustomer({
+          userId: input.userId,
+          workspaceId: input.workspaceId,
+          phone,
+          body,
+          customerName: payload.name as string | undefined,
+        });
+        if (!r.ok) return { ok: false, actionType, detail: "", error: r.error ?? "השליחה נכשלה" };
+        return { ok: true, actionType, detail: "ההודעה נשלחה בוואטסאפ.", data: { via: r.via, messageId: r.messageId } };
+      }
+
       case "post_social": {
         return {
           ok: true,
