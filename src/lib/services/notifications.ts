@@ -5,7 +5,7 @@
  */
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { notifications, workspaceMembers } from "@/lib/db/schema";
+import { notifications, workspaceMembers, users } from "@/lib/db/schema";
 import { id } from "@/lib/ids";
 import { env } from "@/lib/env";
 import { sendPushToUser } from "./push";
@@ -22,8 +22,24 @@ async function pingOwnerWhatsApp(userId: string, input: NotifyInput): Promise<vo
     const { ownerNumberForUserId } = await import("@/lib/integrations/owners");
     const number = await ownerNumberForUserId(userId);
     if (!number) return;
-    const { sendWhatsApp } = await import("@/lib/integrations/whatsapp-send");
     const text = input.body ? `${input.title}\n\n${input.body}` : input.title;
+
+    // Owners only stay inside WhatsApp's 24h service window if THEY message the
+    // bot — a reminder/brief the assistant sends them does not open or extend
+    // it, and owner-command messages aren't logged anywhere we can check
+    // synchronously. A plain-text send outside the window looks like it
+    // succeeded (Meta 200s it) and only fails later, silently, via webhook —
+    // that exact bug is what sent Paz's husband a shopping list that never
+    // arrived. Route owner pings through the already-approved dalor_note
+    // template every time instead: it always lands, in or out of window.
+    const { metaWaConfigured, sendMetaTemplateNamed } = await import("@/lib/integrations/meta-whatsapp");
+    if (metaWaConfigured()) {
+      const u = await db.query.users.findFirst({ where: eq(users.id, userId) });
+      const first = (u?.fullName ?? "").trim().split(/\s+/)[0] || "שם";
+      await sendMetaTemplateNamed(env.metaOwnerMessageTemplate, number, [first, text.slice(0, 900)]);
+      return;
+    }
+    const { sendWhatsApp } = await import("@/lib/integrations/whatsapp-send");
     await sendWhatsApp(number, text.slice(0, 3500));
   } catch {
     /* best effort — the in-app row + push already landed */
