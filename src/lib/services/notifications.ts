@@ -30,13 +30,14 @@ async function pingOwnerWhatsApp(userId: string, input: NotifyInput): Promise<vo
     // synchronously. A plain-text send outside the window looks like it
     // succeeded (Meta 200s it) and only fails later, silently, via webhook —
     // that exact bug is what sent Paz's husband a shopping list that never
-    // arrived. Route owner pings through the already-approved dalor_note
-    // template every time instead: it always lands, in or out of window.
+    // arrived. Route owner pings through owner_update every time instead —
+    // worded as "your personal assistant", not the customer-facing dalor_note
+    // — so it always lands, in or out of window.
     const { metaWaConfigured, sendMetaTemplateNamed } = await import("@/lib/integrations/meta-whatsapp");
     if (metaWaConfigured()) {
       const u = await db.query.users.findFirst({ where: eq(users.id, userId) });
       const first = (u?.fullName ?? "").trim().split(/\s+/)[0] || "שם";
-      await sendMetaTemplateNamed(env.metaOwnerMessageTemplate, number, [first, text.slice(0, 900)]);
+      await sendMetaTemplateNamed(env.metaOwnerUpdateTemplate, number, [first, text.slice(0, 900)]);
       return;
     }
     const { sendWhatsApp } = await import("@/lib/integrations/whatsapp-send");

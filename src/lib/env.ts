@@ -57,6 +57,9 @@ export const env = {
   metaReminderTemplate: get("META_WA_REMINDER_TEMPLATE", "appointment_reminder"),
   // free-form owner→customer message outside the 24h window: {{1}}=name, {{2}}=body
   metaOwnerMessageTemplate: get("META_WA_OWNER_MESSAGE_TEMPLATE", "dalor_note"),
+  // reminders/briefs/approvals the assistant sends to Paz/Yair themselves —
+  // worded as a personal assistant, not the customer-service dalor_note
+  metaOwnerUpdateTemplate: get("META_WA_OWNER_UPDATE_TEMPLATE", "owner_update"),
   metaTemplateLang: get("META_WA_TEMPLATE_LANG", "he"),
   // customer messages land on יאיר's line; resolve owner + business workspace
   whatsappOwnerEmail: get("WHATSAPP_OWNER_EMAIL", "yair@dalor.co.il"),
