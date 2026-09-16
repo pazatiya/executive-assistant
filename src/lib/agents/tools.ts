@@ -15,6 +15,7 @@ import { emails, messages, workspaces } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { logActivity } from "@/lib/services/activity";
 import { env } from "@/lib/env";
+import { parseAppLocalOrIso } from "@/lib/utils";
 
 /**
  * A task/reminder created from an owner's WhatsApp message always defaults
@@ -82,7 +83,7 @@ const update_task: ToolFn = async (ctx, input) => {
 
 const create_reminder: ToolFn = async (ctx, input) => {
   if (!input.dueAt) return { ok: false, summary: "חסר מועד לתזכורת (dueAt)" };
-  let due = new Date(String(input.dueAt));
+  let due = parseAppLocalOrIso(String(input.dueAt));
   if (isNaN(due.getTime())) return { ok: false, summary: `מועד לא תקין: ${input.dueAt}` };
   // guard against a model returning a stale year — roll forward to a future instant
   const now = Date.now();
