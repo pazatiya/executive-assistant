@@ -34,13 +34,20 @@ async function pingOwnerWhatsApp(userId: string, input: NotifyInput): Promise<vo
     // worded as "your personal assistant", not the customer-facing dalor_note
     // — so it always lands, in or out of window.
     const { metaWaConfigured, sendMetaTemplateNamed } = await import("@/lib/integrations/meta-whatsapp");
+    const { sendWhatsApp } = await import("@/lib/integrations/whatsapp-send");
     if (metaWaConfigured()) {
       const u = await db.query.users.findFirst({ where: eq(users.id, userId) });
       const first = (u?.fullName ?? "").trim().split(/\s+/)[0] || "שם";
-      await sendMetaTemplateNamed(env.metaOwnerUpdateTemplate, number, [first, text.slice(0, 900)]);
+      const r = await sendMetaTemplateNamed(env.metaOwnerUpdateTemplate, number, [first, text.slice(0, 900)]);
+      if (r.ok) return;
+      // Template rejected (not yet approved, wrong language, etc.) — that
+      // doesn't mean the owner is unreachable. If they messaged the bot
+      // recently, WhatsApp's 24h service window is open and plain text goes
+      // straight through; if it's genuinely closed, this attempt just fails
+      // the same way the template did, no worse off than before.
+      await sendWhatsApp(number, text.slice(0, 3500));
       return;
     }
-    const { sendWhatsApp } = await import("@/lib/integrations/whatsapp-send");
     await sendWhatsApp(number, text.slice(0, 3500));
   } catch {
     /* best effort — the in-app row + push already landed */
