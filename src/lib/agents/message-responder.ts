@@ -5,7 +5,7 @@ import { ModelRouter } from "@/lib/ai/model-router";
 import { listMemories } from "@/lib/services/memory";
 import { createApproval } from "@/lib/services/approvals";
 import { logActivity } from "@/lib/services/activity";
-import { updateMessage, type Message } from "@/lib/services/messages";
+import { updateMessage, MANUAL_REPLY_TOOL, type Message } from "@/lib/services/messages";
 import { executeAction } from "@/lib/services/action-executor";
 import { getAssistantMode } from "@/lib/services/workspaces";
 import { notifyOwnersOf } from "@/lib/services/notifications";
@@ -78,7 +78,7 @@ async function recentAutoReplyCount(channel: Message["channel"], authorHandle: s
 // can easily have 60-90 minute gaps between replies while they think it
 // over, and 1 hour was cutting that off mid-conversation).
 const OWNER_HANDLING_WINDOW_MS = 3 * 60 * 60_000;
-const OWNER_SEND_TOOLS = ["send_message_now", "send_image_to_customer", "reach_out_to_customer", "message_customer"];
+const OWNER_SEND_TOOLS = ["send_message_now", "send_image_to_customer", "reach_out_to_customer", "message_customer", MANUAL_REPLY_TOOL];
 async function ownerHandledRecently(authorHandle: string): Promise<boolean> {
   const since = new Date(Date.now() - OWNER_HANDLING_WINDOW_MS).toISOString();
   const rows = await db

@@ -8,6 +8,12 @@ import { logActivity } from "./activity";
 
 export type Message = typeof messages.$inferSelect;
 
+// Shared with message-responder.ts's OWNER_SEND_TOOLS / ownerHandledRecently:
+// any manual send from the app's own reply box (text or media) has to be
+// logged under this tool name so the assistant knows the owner is already
+// handling this customer and skips auto-replying.
+export const MANUAL_REPLY_TOOL = "app_reply";
+
 export interface CreateInboundMessageInput {
   userId: string;
   workspaceId?: string | null;
@@ -139,6 +145,24 @@ export async function replyToMessage(
     .update(messages)
     .set({ status: sent ? "replied" : "drafted", draftReply: body, updatedAt: nowIso() })
     .where(eq(messages.id, row.id));
+  if (sent) {
+    // Record this under the same tool name message-responder's
+    // ownerHandledRecently() looks for — otherwise a manual reply typed here
+    // leaves no trace, and the assistant auto-replies right over the owner
+    // the next time this customer writes in.
+    await logActivity({
+      userId,
+      workspaceId: row.workspaceId,
+      agent: "social",
+      action: `נשלח ל-${row.authorHandle} מתיבת התשובה באפליקציה: "${body.slice(0, 100)}"`,
+      tool: MANUAL_REPLY_TOOL,
+      target: row.authorHandle,
+      riskLevel: "green",
+      approvalStatus: "auto",
+      result: "success",
+      autoExecuted: true,
+    });
+  }
   return { ok: r.ok, sent, error: r.ok ? undefined : r.error };
 }
 
@@ -167,8 +191,8 @@ export async function replyToMessageWithMedia(
     workspaceId: row.workspaceId,
     agent: "social",
     action: `נשלח קובץ ל-${row.authorHandle}`,
-    tool: row.channel,
-    target: row.id,
+    tool: MANUAL_REPLY_TOOL,
+    target: row.authorHandle,
     riskLevel: "green",
     approvalStatus: "auto",
     result: "success",
