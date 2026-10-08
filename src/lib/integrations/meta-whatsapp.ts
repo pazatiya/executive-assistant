@@ -201,8 +201,8 @@ export async function sendMetaTemplate(to: string, bodyParams: string[] = []) {
  */
 export async function sendMetaTemplateNamed(name: string, to: string, rawParams: string[] = []) {
   // Meta rejects (#132018) template params containing newlines, tabs, or 4+
-  // consecutive spaces — flatten them so multi-line alerts still go through.
-  const bodyParams = rawParams.map((t) => t.replace(/\s*[\r\n\t]+\s*/g, " · ").replace(/ {4,}/g, "   ").trim() || "-");
+  // consecutive spaces — flatten them (blank line = "  |  " section break, single newline = space) so multi-line alerts still go through.
+  const bodyParams = rawParams.map((t) => t.replace(/[ \t]*\r?\n(?:[ \t]*\r?\n)+[ \t]*/g, "  |  ").replace(/[ \t]*[\r\n\t]+[ \t]*/g, " ").replace(/ {4,}/g, "   ").trim() || "-");
   return postMessage({
     to: chatIdToNumber(to),
     type: "template",
