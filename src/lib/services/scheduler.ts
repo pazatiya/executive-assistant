@@ -89,16 +89,23 @@ function fmtEod(b: Awaited<ReturnType<typeof buildEndOfDayBrief>>): string {
   return L.join("\n");
 }
 
-async function briefTextFor(userId: string, kind: BriefKind): Promise<string> {
+async function briefTextFor(userId: string, kind: BriefKind): Promise<{ text: string; empty: boolean }> {
   // "personal" business context: pass no workspaceId → cross-workspace scope
-  if (kind === "morning") return fmtMorning(await buildMorningBrief(userId));
-  return fmtEod(await buildEndOfDayBrief(userId));
+  if (kind === "morning") {
+    const b = await buildMorningBrief(userId);
+    const empty = !b.urgent.length && !b.meetingsToday.length && !b.waitingApprovals.length && !b.newLeads.length && !b.overdueTasks.length;
+    return { text: fmtMorning(b), empty };
+  }
+  const b = await buildEndOfDayBrief(userId);
+  // the "suggestions for tomorrow" line is boilerplate, so it doesn't count as content
+  const empty = !b.completed.length && !b.waiting.length && !b.stillOpen.length && !b.problems.length;
+  return { text: fmtEod(b), empty };
 }
 
 export interface BriefRunResult {
   user: string;
   kind: BriefKind;
-  outcome: "sent" | "notified_only" | "skipped_already" | "not_due";
+  outcome: "sent" | "notified_only" | "skipped_already" | "skipped_empty" | "not_due";
 }
 
 /** Send any briefs now due, for every owner. */
@@ -127,7 +134,12 @@ export async function runDueBriefs(now = new Date(), forceKind?: BriefKind): Pro
         continue;
       }
 
-      const text = await briefTextFor(u.id, kind);
+      const { text, empty } = await briefTextFor(u.id, kind);
+      // nothing to report → don't ping the owners (re-checked on the next tick within the window)
+      if (empty && !forced) {
+        results.push({ user: spec.email, kind, outcome: "skipped_empty" });
+        continue;
+      }
       await notify({
         userId: u.id,
         kind: "brief",
