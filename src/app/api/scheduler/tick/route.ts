@@ -27,10 +27,13 @@ function authorized(req: Request): boolean {
  */
 export async function POST(req: Request) {
   if (!authorized(req)) return new Response("unauthorized", { status: 401 });
+  // ?resend=morning|eod — re-send that brief now, ignoring the "already sent" guard
+  const resend = new URL(req.url).searchParams.get("resend");
+  const forceKind = resend === "morning" || resend === "eod" ? resend : undefined;
 
   const [reminders, briefs, appts] = await Promise.all([
     processDueReminders().catch((e) => ({ error: String(e) })),
-    runDueBriefs().catch((e) => ({ error: String(e) })),
+    runDueBriefs(new Date(), forceKind).catch((e) => ({ error: String(e) })),
     runAppointmentReminders().catch((e) => ({ error: String(e) })),
   ]);
 

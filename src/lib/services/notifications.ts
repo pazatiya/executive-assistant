@@ -21,7 +21,10 @@ async function pingOwnerWhatsApp(userId: string, input: NotifyInput): Promise<vo
   try {
     const { ownerNumberForUserId } = await import("@/lib/integrations/owners");
     const number = await ownerNumberForUserId(userId);
-    if (!number) return;
+    if (!number) {
+      console.warn(`[owner-wa] no WhatsApp number mapped for user ${userId} (check OWNER_WHATSAPP emails) — skipped "${input.title}"`);
+      return;
+    }
     const text = input.body ? `${input.title}\n\n${input.body}` : input.title;
 
     // Owners only stay inside WhatsApp's 24h service window if THEY message the
@@ -49,7 +52,8 @@ async function pingOwnerWhatsApp(userId: string, input: NotifyInput): Promise<vo
       return;
     }
     await sendWhatsApp(number, text.slice(0, 3500));
-  } catch {
+  } catch (e) {
+    console.error(`[owner-wa] ping failed: ${e instanceof Error ? e.message : String(e)}`);
     /* best effort — the in-app row + push already landed */
   }
 }

@@ -102,7 +102,7 @@ export interface BriefRunResult {
 }
 
 /** Send any briefs now due, for every owner. */
-export async function runDueBriefs(now = new Date()): Promise<BriefRunResult[]> {
+export async function runDueBriefs(now = new Date(), forceKind?: BriefKind): Promise<BriefRunResult[]> {
   const { minutes, date } = localParts(now);
   const results: BriefRunResult[] = [];
 
@@ -117,11 +117,12 @@ export async function runDueBriefs(now = new Date()): Promise<BriefRunResult[]> 
       const at = prefs[PREF_KEY[kind]] || DEFAULT_AT[kind];
       const dueMin = toMinutes(at);
       // fire within a 90-min window after the target time (covers cron gaps)
-      if (minutes < dueMin || minutes > dueMin + 90) {
+      const forced = forceKind === kind;
+      if (!forced && (minutes < dueMin || minutes > dueMin + 90)) {
         results.push({ user: spec.email, kind, outcome: "not_due" });
         continue;
       }
-      if (await alreadySent(u.id, kind, date)) {
+      if (!forced && (await alreadySent(u.id, kind, date))) {
         results.push({ user: spec.email, kind, outcome: "skipped_already" });
         continue;
       }
