@@ -28,7 +28,7 @@
 | 8 | `dalor_booking_approved` | 1428716609367680 | PENDING | לא | לא בוצעה |
 | 9 | `dalor_booking_unavailable` | 1826371825189005 | PENDING | לא | לא בוצעה |
 | 10 | `dalor_booking_group` | 1079951078262303 | PENDING | לא | לא בוצעה |
-| 11 | `dalor_booking_waitlist` | 2265173150691525 | PENDING | לא | לא בוצעה |
+| 11 | `dalor_booking_waitlist` | 2265173150691525 | PENDING (Meta סיווגה Marketing) | לא — לא בשימוש, לא נחבר | — |
 | 12 | `dalor_booking_cancel_confirm` | 2543845689423233 | PENDING | לא | לא בוצעה |
 
 ### 1. `dalor_booking_confirm`
@@ -222,7 +222,9 @@
 - **כללים:** לא לשלוח בנוסף אישור רגיל לכל משתתף. אם המשתתפים בזמנים שונים — להציג לפחות את שעת ההתחלה הראשונה; הפירוט נשמר באזור ההזמנה.
 - **מזהה Meta:** 1079951078262303 · **סטטוס:** PENDING · **קטגוריה:** UTILITY
 
-### 11. `dalor_booking_waitlist`
+### 11. `dalor_booking_waitlist` — לא בשימוש
+
+> **12.10.2026:** פז החליטה שאין צורך בתבנית (לא שולחים הודעה כשמתפנה תור). Meta סיווגה אותה מחדש ל-Marketing. לא מחברים אותה לשום אירוע. נשארת ב-Meta כ-PENDING ואפשר למחוק.
 
 **גוף:**
 
