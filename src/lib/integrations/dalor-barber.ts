@@ -9,6 +9,7 @@
  * assistant offers exactly the times the site would.
  */
 import { env } from "@/lib/env";
+import { appOffsetMinutes } from "@/lib/utils";
 import { BaseConnector, type Capability, type Connector, type ConnectorActionResult } from "./connector";
 
 const cap = (key: string, label: string, risk: Capability["risk"]): Capability => ({ key, label, risk });
@@ -31,18 +32,9 @@ const HALF = new Set([
   "2027-04-20","2027-06-09","2027-09-30","2027-10-09","2027-10-14",
 ]);
 
+// Summer time per the tz database (offset +03:00) — no hand-written March/October rules to get wrong in some year.
 function isSummerIL(d: Date): boolean {
-  const m = d.getMonth();
-  if (m >= 10 || m <= 1) return false;
-  if (m >= 3 && m <= 8) return true;
-  if (m === 2) {
-    const ld = new Date(d.getFullYear(), 3, 0);
-    while (ld.getDay() !== 5) ld.setDate(ld.getDate() - 1);
-    return d.getDate() >= ld.getDate();
-  }
-  const ld = new Date(d.getFullYear(), 10, 0);
-  while (ld.getDay() !== 0) ld.setDate(ld.getDate() - 1);
-  return d.getDate() < ld.getDate();
+  return appOffsetMinutes(d) === 180;
 }
 
 function todayISOInTz(): string {

@@ -46,31 +46,67 @@ export function clamp(n: number, min: number, max: number) {
 const APP_TZ = "Asia/Jerusalem";
 
 /**
- * Parses a datetime string the way the app actually means it: a bare
- * "YYYY-MM-DDTHH:MM[:SS]" with no timezone designator is Israel local time
- * (that's what the AI is told to write for "16:00 today"), not UTC. Handed
- * straight to `new Date(...)` on Render's UTC server, "16:00" was read as
- * 16:00 UTC — Israel 19:00 — so every reminder fired three hours late. A
- * string that already carries a 'Z' or '+HH:MM' offset is trusted as-is.
+ * Everything below reads Israel's clock from the tz database (Intl), never from
+ * a hard-coded +02:00/+03:00, so the switch between summer and winter time
+ * (last Sunday of March / October) needs no code or config change.
+ */
+const partsFmt = new Intl.DateTimeFormat("en-US", {
+  timeZone: APP_TZ,
+  hourCycle: "h23",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+});
+
+/** Israel wall-clock Y/M/D h:m:s at an instant. */
+export function appLocalParts(at: Date) {
+  const p = Object.fromEntries(partsFmt.formatToParts(at).map((x) => [x.type, x.value]));
+  return { y: +p.year, mo: +p.month, d: +p.day, h: +p.hour, mi: +p.minute, s: +p.second };
+}
+
+/** Minutes Israel's clock leads UTC at an instant: 120 in winter, 180 in summer. */
+export function appOffsetMinutes(at: Date): number {
+  const q = appLocalParts(at);
+  const asUtc = Date.UTC(q.y, q.mo - 1, q.d, q.h, q.mi, q.s);
+  return Math.round((asUtc - Math.floor(at.getTime() / 1000) * 1000) / 60000);
+}
+
+/** The instant at which Israel's wall clock shows this date and time (DST-aware, two-pass like the booking engine). */
+export function appLocalDate(y: number, mo: number, d: number, h = 0, mi = 0, s = 0): Date {
+  const guess = Date.UTC(y, mo - 1, d, h, mi, s);
+  let off = appOffsetMinutes(new Date(guess));
+  const t = guess - off * 60000;
+  off = appOffsetMinutes(new Date(t));
+  return new Date(guess - off * 60000);
+}
+
+/** Calendar-day arithmetic on an Israel date, keeping the wall-clock time (a "daily 15:00" stays 15:00 across the clock change). */
+export function addAppLocalDays(at: Date, days: number): Date {
+  const q = appLocalParts(at);
+  const t = new Date(Date.UTC(q.y, q.mo - 1, q.d + days));
+  return appLocalDate(t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate(), q.h, q.mi, q.s);
+}
+
+/** Day of week (0=Sunday … 6=Saturday) of the Israel date at an instant. */
+export function appLocalDow(at: Date): number {
+  const q = appLocalParts(at);
+  return new Date(Date.UTC(q.y, q.mo - 1, q.d)).getUTCDay();
+}
+
+/**
+ * Parses a datetime string the way the app actually means it. A bare
+ * "YYYY-MM-DDTHH:MM[:SS]" is Israel local time (that's what the AI is told to
+ * write). An explicit Israel offset (+02:00 / +03:00) is ALSO read as Israel
+ * wall-clock: the model copies whatever offset it last saw, and a summer
+ * "+03:00" on a winter date silently moved reminders an hour early (the
+ * 25.10.2026 clock change). 'Z' and any other offset are trusted as real instants.
  */
 export function parseAppLocalOrIso(input: string): Date {
-  const m = input.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  const m = input.trim().match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:\s*\+0?[23](?::?00)?)?$/);
   if (!m) return new Date(input);
   const [, y, mo, d, h, mi, s] = m;
-  const guessUtc = Date.UTC(+y, +mo - 1, +d, +h, +mi, +(s ?? 0));
-  const fmt = new Intl.DateTimeFormat("en-US", {
-    timeZone: APP_TZ,
-    hour12: false,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-  const p = Object.fromEntries(fmt.formatToParts(new Date(guessUtc)).map((x) => [x.type, x.value]));
-  const hour = p.hour === "24" ? 0 : Number(p.hour);
-  const asIfUtc = Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day), hour, Number(p.minute), Number(p.second));
-  const offsetMs = asIfUtc - guessUtc; // how far Israel's clock leads UTC at that instant (DST-aware)
-  return new Date(guessUtc - offsetMs);
+  return appLocalDate(+y, +mo, +d, +h, +mi, +(s ?? 0));
 }

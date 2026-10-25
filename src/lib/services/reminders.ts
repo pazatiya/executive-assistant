@@ -2,7 +2,7 @@ import { and, asc, eq, isNull, lte, inArray, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { reminders } from "@/lib/db/schema";
 import { id } from "@/lib/ids";
-import { nowIso } from "@/lib/utils";
+import { nowIso, appLocalParts, appLocalDate, addAppLocalDays, appLocalDow } from "@/lib/utils";
 import { canAccessRow, listScope } from "@/lib/auth/scope";
 import { notify } from "./notifications";
 import { logActivity } from "./activity";
@@ -92,23 +92,26 @@ export async function updateReminder(userId: string, remId: string, patch: Parti
   return db.query.reminders.findFirst({ where: eq(reminders.id, remId) });
 }
 
-const RECURRENCE_MS: Record<string, number> = {
-  daily: 86400000,
-  weekdays: 86400000,
-  weekly: 604800000,
-  monthly: 2592000000,
-};
-
-/** Next occurrence for a recurrence rule, skipping Sat for "weekdays". */
+/**
+ * Next occurrence for a recurrence rule, skipping Saturday for "weekdays".
+ * Works in Israel calendar days and keeps the wall-clock time, so a daily 15:00
+ * reminder stays at 15:00 across the summer/winter clock change instead of
+ * drifting an hour (a fixed +24h step did exactly that).
+ */
 function nextDueAt(from: Date, recurrence: string): string | null {
-  const step = RECURRENCE_MS[recurrence];
-  if (!step) return null;
-  let next = new Date(from.getTime() + step);
+  if (recurrence === "daily") return addAppLocalDays(from, 1).toISOString();
+  if (recurrence === "weekly") return addAppLocalDays(from, 7).toISOString();
   if (recurrence === "weekdays") {
-    // Israeli work week: skip Saturday (getDay 6); Fri→Sun handled naturally
-    while (next.getDay() === 6) next = new Date(next.getTime() + 86400000);
+    let next = addAppLocalDays(from, 1);
+    while (appLocalDow(next) === 6) next = addAppLocalDays(next, 1); // Israeli work week: skip Saturday
+    return next.toISOString();
   }
-  return next.toISOString();
+  if (recurrence === "monthly") {
+    const q = appLocalParts(from);
+    const lastDay = new Date(Date.UTC(q.y, q.mo + 1, 0)).getUTCDate(); // days in next month
+    return appLocalDate(q.y, q.mo + 1, Math.min(q.d, lastDay), q.h, q.mi, q.s).toISOString();
+  }
+  return null;
 }
 
 /**

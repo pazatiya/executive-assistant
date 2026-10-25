@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { activityLogs, approvals, emails, messages, reminders, tasks } from "@/lib/db/schema";
-import { nowIso } from "@/lib/utils";
+import { nowIso, appLocalParts, appLocalDate } from "@/lib/utils";
 import { listScope } from "@/lib/auth/scope";
 
 export interface MorningBrief {
@@ -50,8 +50,8 @@ export async function buildMorningBrief(userId: string, workspaceId?: string): P
     listScope({ userId: emails.userId, workspaceId: emails.workspaceId }, userId, workspaceId),
     listScope({ userId: messages.userId, workspaceId: messages.workspaceId }, userId, workspaceId),
   ]);
-  const today = new Date();
-  const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59).toISOString();
+  const lp = appLocalParts(new Date());
+  const endOfDay = appLocalDate(lp.y, lp.mo, lp.d, 23, 59, 59).toISOString(); // end of today, Israel time
 
   const dueReminders = await db
     .select()

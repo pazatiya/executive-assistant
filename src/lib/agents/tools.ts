@@ -15,7 +15,7 @@ import { emails, messages, workspaces } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 import { logActivity } from "@/lib/services/activity";
 import { env } from "@/lib/env";
-import { parseAppLocalOrIso } from "@/lib/utils";
+import { parseAppLocalOrIso, appLocalParts, appLocalDate, addAppLocalDays } from "@/lib/utils";
 
 /**
  * A task/reminder created from an owner's WhatsApp message always defaults
@@ -88,11 +88,11 @@ const create_reminder: ToolFn = async (ctx, input) => {
   // guard against a model returning a stale year — roll forward to a future instant
   const now = Date.now();
   if (due.getTime() < now - 3600_000) {
-    const hh = due.getHours();
-    const mm = due.getMinutes();
-    due = new Date();
-    due.setHours(hh, mm, 0, 0);
-    if (due.getTime() < now) due.setDate(due.getDate() + 1);
+    // keep the Israel wall-clock time of day (not the server's UTC one), today or tomorrow
+    const was = appLocalParts(due);
+    const today = appLocalParts(new Date(now));
+    due = appLocalDate(today.y, today.mo, today.d, was.h, was.mi, 0);
+    if (due.getTime() < now) due = addAppLocalDays(due, 1);
   }
   const r = await createReminder({
     userId: ctx.userId,
@@ -107,7 +107,7 @@ const create_reminder: ToolFn = async (ctx, input) => {
   });
   return {
     ok: true,
-    summary: `נקבעה תזכורת "${r.title}" ל-${new Date(r.dueAt).toLocaleString("he-IL")}`,
+    summary: `נקבעה תזכורת "${r.title}" ל-${new Date(r.dueAt).toLocaleString("he-IL", { timeZone: "Asia/Jerusalem", dateStyle: "short", timeStyle: "short" })}`,
     reminderId: r.id,
     agent: "task",
   };
@@ -684,7 +684,7 @@ export const TOOL_SCHEMAS: ToolSchema[] = [
   },
   {
     name: "create_reminder",
-    description: "קובע תזכורת. חובה dueAt ב-ISO. ל-follow-up השתמש kind=follow_up. recurrence: daily/weekly/weekdays/monthly.",
+    description: "קובע תזכורת. חובה dueAt כשעה מקומית ישראלית בפורמט YYYY-MM-DDTHH:MM:SS — בלי אזור זמן, בלי Z ובלי +03:00. ל-follow-up השתמש kind=follow_up. recurrence: daily/weekly/weekdays/monthly.",
     parameters: {
       type: "object",
       properties: {

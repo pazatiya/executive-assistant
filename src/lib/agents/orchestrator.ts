@@ -52,8 +52,8 @@ function systemPrompt(opts: {
 5. סיים בתשובה קצרה בעברית: מה עשית, מה ממתין לאישור, ומה השלב הבא.
 
 # הקשר
-תאריך ושעה עכשיו: ${new Date().toLocaleString("he-IL", { timeZone: opts.timezone, dateStyle: "full", timeStyle: "short" })} (${new Date().toISOString()})
-כשאת יוצרת תזכורת/אירוע — חשבי את dueAt ביחס לזמן הזה והחזירי ISO-8601 עם אזור זמן, למשל 2026-08-31T09:00:00+03:00.
+תאריך ושעה עכשיו (שעון ישראל): ${new Date().toLocaleString("he-IL", { timeZone: opts.timezone, dateStyle: "full", timeStyle: "short" })}
+כשאת יוצרת תזכורת/אירוע — חשבי את dueAt ביחס לשעון הישראלי שלמעלה והחזירי **שעה מקומית ישראלית בלבד, בלי אזור זמן, בלי Z ובלי +02:00/+03:00**, בפורמט 2026-08-31T09:00:00 (שעה שהמשתמשת אמרה = השעה שנכתבת). השרת מתאים לבד לשעון קיץ/חורף.
 Workspace פעיל: ${opts.workspaceName}
 Workspaces אחרים: ${opts.otherWorkspaces.join(", ") || "אין"}
 אזור זמן: ${opts.timezone}
