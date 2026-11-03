@@ -80,6 +80,9 @@ export const env = {
   // DALOR barber booking app (dalorbook.duckdns.org)
   dalorBarberUrl: get("DALOR_BARBER_URL", "https://dalorbook.duckdns.org"),
   dalorBarberAdminKey: get("DALOR_BARBER_ADMIN_KEY"),
+  // Customer appointment reminders are owned by the booking system (it holds the
+  // customer's WhatsApp consent). Keep this off to avoid duplicates / no-consent sends.
+  apptRemindersEnabled: get("APPT_REMINDERS_ENABLED", "false") === "true",
   apptReminderLeadHours: Number(get("APPT_REMINDER_LEAD_HOURS", "3.5")) || 3.5,
 
   // scheduler / cron auth (Stage 4)

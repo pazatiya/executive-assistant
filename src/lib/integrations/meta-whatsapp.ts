@@ -56,6 +56,7 @@ interface MetaWebhook {
             list_reply?: { title?: string };
           };
           image?: { id?: string; caption?: string; mime_type?: string };
+          audio?: { id?: string; mime_type?: string; voice?: boolean };
         }[];
         // delivery/read receipts for messages *we* sent — a distinct event
         // from `messages` above, carrying no message content, just status.
@@ -120,14 +121,20 @@ export function parseMetaInboundAll(raw: unknown): InboundMessage[] {
       if (env.metaWaPhoneNumberId && pnid && pnid !== env.metaWaPhoneNumberId) continue;
       for (const m of value?.messages ?? []) {
         if (!m || !m.from) continue;
-        const text =
+        const text = (
+          (
           m.text?.body ??
           m.button?.text ??
           m.interactive?.button_reply?.title ??
           m.interactive?.list_reply?.title ??
           // an image with no caption still needs non-empty text, or it's
           // silently dropped by the "!msg.text → skipped" check downstream.
-          (m.image ? `[תמונה מצורפת${m.image.caption ? `: ${m.image.caption}` : ""}]` : "");
+          (m.image ? `[תמונה מצורפת${m.image.caption ? `: ${m.image.caption}` : ""}]` : "")
+          ) ||
+          // a voice message carries no text — placeholder keeps it from being
+          // dropped; the pipeline replaces it with the transcript.
+          (m.audio ? "[הודעה קולית]" : "")
+        );
         const contact = value?.contacts?.find((c) => c.wa_id === m.from) ?? value?.contacts?.[0];
         out.push({
           externalId: String(m.id ?? `${m.from}:${m.timestamp ?? Date.now()}`),
@@ -141,6 +148,7 @@ export function parseMetaInboundAll(raw: unknown): InboundMessage[] {
           fromMe: false, // Meta never delivers our own outbound as an inbound message
           isGroup: false, // the Cloud API has no group messaging
           mediaId: m.image?.id,
+          audioId: m.audio?.id,
         });
       }
     }

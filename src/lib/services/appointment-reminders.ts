@@ -67,6 +67,8 @@ export interface ApptReminderResult {
 }
 
 export async function runAppointmentReminders(now = new Date()): Promise<ApptReminderResult[]> {
+  // Off by default: the booking system sends reminders (only to customers who consented).
+  if (!env.apptRemindersEnabled) return [];
   const lead = env.apptReminderLeadHours;
   const { date, minutes } = localNow(now);
   const results: ApptReminderResult[] = [];

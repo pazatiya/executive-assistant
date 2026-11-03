@@ -44,6 +44,8 @@ export interface RespondInput {
   triage: MessageTriage;
   ownerUserId: string;
   workspaceId: string | null;
+  /** Message was a voice note (machine-transcribed) — never auto-send, always leave a draft for the owners. */
+  viaVoice?: boolean;
 }
 
 export interface RespondResult {
@@ -280,7 +282,7 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
   const ACK_AND_ALERT = new Set(["wants_human", "clothing_availability", "clothing_order", "order_status"]);
   if (ACK_AND_ALERT.has(triage.intent)) {
     let acked = false;
-    if (mode === "active" && autoCount < MAX_CONSECUTIVE_AUTO && !ownerHandling) {
+    if (mode === "active" && !input.viaVoice && autoCount < MAX_CONSECUTIVE_AUTO && !ownerHandling) {
       const r = await executeAction({
         userId: ownerUserId,
         workspaceId,
@@ -327,6 +329,7 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
 
   const canAutoSend =
     mode === "active" &&
+    !input.viaVoice &&
     grounded &&
     !isComplaint &&
     AUTO_SEND_INTENTS.has(triage.intent) &&

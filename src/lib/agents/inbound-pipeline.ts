@@ -14,6 +14,7 @@ import { createInboundMessage, findMessageByExternalId, updateMessage } from "@/
 import { triageMessage } from "@/lib/agents/message-triage";
 import { respondToMessage } from "@/lib/agents/message-responder";
 import { runAutomations } from "@/lib/automation/engine";
+import { transcribeVoiceMessage } from "@/lib/integrations/transcribe";
 
 export type IngestResult =
   | { ok: true; handled: "ignored" | "skipped" | "duplicate" | "owner_command" }
@@ -38,6 +39,13 @@ export async function ingestWhatsAppMessage(msg: InboundMessage | null): Promise
   if (alreadySeen(msg.externalId)) {
     console.log(`[inbound] duplicate externalId=${msg.externalId} — dropped`);
     return { ok: true, handled: "duplicate" };
+  }
+
+  // Voice note → transcribe first, then it flows through like typed text.
+  if (msg.audioId) {
+    const t = await transcribeVoiceMessage(msg.audioId);
+    msg = { ...msg, text: t.ok ? `🎤 ${t.text}` : "🎤 [הודעה קולית — לא הצלחתי לתמלל, כדאי להאזין]" };
+    console.log(`[inbound] voice from=${msg.fromNumber} transcript=${t.ok ? `"${t.text.slice(0, 120)}"` : `FAILED ${t.error}`}`);
   }
 
   // A message from an owner's own number is a command, not a customer.
@@ -102,6 +110,7 @@ export async function ingestWhatsAppMessage(msg: InboundMessage | null): Promise
       triage,
       ownerUserId: target.userId,
       workspaceId: target.workspaceId,
+      viaVoice: !!msg.audioId,
     });
   } catch (e) {
     console.error("respondToMessage failed", e);

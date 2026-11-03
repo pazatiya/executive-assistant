@@ -133,6 +133,8 @@ export interface InboundMessage {
   isGroup: boolean;
   /** Present only for an image message (Meta Cloud API) — its media id, re-fetchable/forwardable via send_image_to_customer. */
   mediaId?: string;
+  /** Present only for a voice message (Meta Cloud API) — its media id; transcribed before processing. */
+  audioId?: string;
 }
 
 /** Parse a WAHA `message` webhook body into our shape, or null if not a usable DM. */
