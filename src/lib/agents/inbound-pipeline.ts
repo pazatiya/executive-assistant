@@ -41,9 +41,11 @@ export async function ingestWhatsAppMessage(msg: InboundMessage | null): Promise
     return { ok: true, handled: "duplicate" };
   }
 
+  let heardAs: string | null = null;
   // Voice note → transcribe first, then it flows through like typed text.
   if (msg.audioId) {
     const t = await transcribeVoiceMessage(msg.audioId);
+    heardAs = t.ok ? t.text : null;
     msg = { ...msg, text: t.ok ? `🎤 ${t.text}` : "🎤 [הודעה קולית — לא הצלחתי לתמלל, כדאי להאזין]" };
     console.log(`[inbound] voice from=${msg.fromNumber} transcript=${t.ok ? `"${t.text.slice(0, 120)}"` : `FAILED ${t.error}`}`);
   }
@@ -60,7 +62,9 @@ export async function ingestWhatsAppMessage(msg: InboundMessage | null): Promise
         return { ok: true, handled: "owner_command" };
       }
       console.log(`[owner_command] reply ready (${reply.length} chars) — sending back to ${msg.fromNumber}`);
-      const sent = await sendWhatsApp(msg.fromNumber, reply).catch((e) => ({ ok: false, error: e instanceof Error ? e.message : String(e) }));
+      // a voice command: show what was heard, so a mis-transcribed number is caught immediately
+      const replyOut = heardAs ? `🎤 שמעתי: "${heardAs}"\n\n${reply}` : reply;
+      const sent = await sendWhatsApp(msg.fromNumber, replyOut).catch((e) => ({ ok: false, error: e instanceof Error ? e.message : String(e) }));
       if (!sent.ok) {
         console.error(`[owner_command] send-back FAILED to ${msg.fromNumber}: ${sent.error}`);
       } else {
@@ -88,7 +92,7 @@ export async function ingestWhatsAppMessage(msg: InboundMessage | null): Promise
     text: msg.text,
     receivedAt: msg.receivedAt,
     source: "live",
-    mediaId: msg.mediaId ?? null,
+    mediaId: msg.mediaId ?? msg.audioId ?? null,
   });
 
   const triage = await triageMessage({

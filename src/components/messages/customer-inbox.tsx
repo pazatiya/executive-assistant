@@ -218,7 +218,17 @@ export function CustomerInbox({ messages }: { messages: InboxMessage[] }) {
                     <span className={`rounded px-1.5 py-0.5 text-[11px] ${st.cls}`}>{st.label}</span>
                   </div>
                   <p className={`mt-0.5 text-sm ${open ? "" : "line-clamp-1"} text-muted-foreground`}>{m.text}</p>
-                  {m.mediaId && (
+                  {m.mediaId && m.text.startsWith("🎤") && (
+                    // voice note: the transcript is the text above, the original is playable here
+                    <audio
+                      controls
+                      preload="none"
+                      src={`/api/whatsapp/media/${m.mediaId}`}
+                      className="mt-2 h-10 w-full max-w-xs"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  )}
+                  {m.mediaId && !m.text.startsWith("🎤") && (
                     // eslint-disable-next-line @next/next/no-img-element -- proxied Meta media, not a static asset
                     <img
                       src={`/api/whatsapp/media/${m.mediaId}`}
