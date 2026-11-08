@@ -29,6 +29,14 @@ export interface ExecuteResult {
  * exists it is used; otherwise the local record is updated and the executor
  * reports `simulated: true` in its data so nothing pretends to have gone out.
  */
+/** "2026-11-09" -> "שני 9/11" (Israel-style short date for customer text). */
+function heDay(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return iso;
+  const dow = new Intl.DateTimeFormat("he-IL", { weekday: "long", timeZone: "UTC" }).format(new Date(`${iso}T12:00:00Z`));
+  return `${dow.replace(/^יום\s*/, "")} ${Number(m[3])}/${Number(m[2])}`;
+}
+
 export async function executeAction(input: ExecuteInput): Promise<ExecuteResult> {
   const { actionType, payload } = input;
 
@@ -156,6 +164,7 @@ export async function executeAction(input: ExecuteInput): Promise<ExecuteResult>
         if (!r.ok) return { ok: false, actionType, detail: "", error: r.error ?? "קביעת התור נכשלה" };
 
         // tell the customer it's confirmed
+        const confirmText = `נקבע לך תור ליום ${heDay(date)} בשעה ${time} ✂️ נתראה! אם צריך לשנות — פשוט תכתוב לי כאן.`;
         const replyTo = String(payload.replyTo ?? payload.phone ?? "");
         if (replyTo) {
           await sendBookingConfirmation({
@@ -164,14 +173,19 @@ export async function executeAction(input: ExecuteInput): Promise<ExecuteResult>
             date,
             time,
             service: payload.service ? String(payload.service) : null,
-            fallbackText: `נקבע לך תור ל-${date} בשעה ${time} ✂️ נתראה! אם צריך לשנות — פשוט תכתוב לי כאן.`,
+            fallbackText: confirmText,
           }).catch(() => {
             /* best effort */
           });
         }
         const messageId = payload.messageId as string | undefined;
         if (messageId)
-          await db.update(messages).set({ status: "replied", updatedAt: nowIso() }).where(eq(messages.id, messageId));
+          // draftReply must show what the customer actually got (the confirmation),
+          // not the earlier "passing it for approval" draft that was never sent.
+          await db
+            .update(messages)
+            .set({ status: "replied", draftReply: replyTo ? confirmText : null, updatedAt: nowIso() })
+            .where(eq(messages.id, messageId));
         return { ok: true, actionType, detail: `תור נקבע — ${date} ${time}`, data: r.data ?? {} };
       }
 
