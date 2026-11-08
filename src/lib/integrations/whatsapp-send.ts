@@ -97,3 +97,29 @@ export async function sendBookingConfirmation(input: {
   ]);
   return { ok: r.ok, providerId: r.id, via: "meta-template", error: r.error };
 }
+
+/**
+ * Cancellation confirmation after the customer asked the secretary to cancel.
+ * Same window logic as the booking confirmation; outside the window the approved
+ * `dalor_booking_cancel_confirm` template is used: {{1}}=name, {{2}}=date, {{3}}=time.
+ */
+export async function sendBookingCancelConfirmation(input: {
+  to: string;
+  name?: string | null;
+  date: string;
+  time: string;
+  fallbackText: string;
+}): Promise<{ ok: boolean; providerId?: string; via: string; error?: string }> {
+  if (!metaWaConfigured()) return sendWhatsApp(input.to, input.fallbackText);
+  const { chatIdToNumber } = await import("./waha");
+  const number = chatIdToNumber(input.to);
+  if (await hasOpenWindow(number)) return sendWhatsApp(input.to, input.fallbackText);
+  const [{ sendMetaTemplateNamed }, { env }] = await Promise.all([import("./meta-whatsapp"), import("@/lib/env")]);
+  const first = (input.name || "").trim().split(/\s+/)[0] || "לקוח יקר";
+  const r = await sendMetaTemplateNamed(env.metaBookingCancelConfirmTemplate, number, [
+    first,
+    formatDateIl(input.date),
+    input.time,
+  ]);
+  return { ok: r.ok, providerId: r.id, via: "meta-template", error: r.error };
+}

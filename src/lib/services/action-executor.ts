@@ -3,8 +3,8 @@ import { db } from "@/lib/db";
 import { emails, messages, tasks } from "@/lib/db/schema";
 import { nowIso } from "@/lib/utils";
 import { getConnector } from "@/lib/integrations/registry";
-import { createBooking } from "@/lib/integrations/dalor-barber";
-import { sendWhatsApp, sendWhatsAppWindowAware, sendBookingConfirmation } from "@/lib/integrations/whatsapp-send";
+import { createBooking, cancelAppointment } from "@/lib/integrations/dalor-barber";
+import { sendWhatsApp, sendWhatsAppWindowAware, sendBookingConfirmation, sendBookingCancelConfirmation } from "@/lib/integrations/whatsapp-send";
 import { updateReminder } from "@/lib/services/reminders";
 
 export interface ExecuteInput {
@@ -187,6 +187,43 @@ export async function executeAction(input: ExecuteInput): Promise<ExecuteResult>
             .set({ status: "replied", draftReply: replyTo ? confirmText : null, updatedAt: nowIso() })
             .where(eq(messages.id, messageId));
         return { ok: true, actionType, detail: `תור נקבע — ${date} ${time}`, data: r.data ?? {} };
+      }
+
+      case "cancel_appointment": {
+        const appointmentId = String(payload.appointmentId ?? "");
+        const date = String(payload.date ?? "");
+        const time = String(payload.time ?? "");
+        if (!appointmentId) return { ok: false, actionType, detail: "", error: "חסר מזהה תור לביטול" };
+        const r = await cancelAppointment(appointmentId);
+        if (!r.ok) return { ok: false, actionType, detail: "", error: r.error ?? "ביטול התור נכשל" };
+
+        // answer the customer in the chat they asked in (the booking system only
+        // messages customers who consented to WhatsApp reminders)
+        const cancelText = `ביטלתי לך את התור ליום ${heDay(date)} בשעה ${time}. כשתרצה לקבוע תור חדש — פשוט תכתוב לי כאן ✂️`;
+        const replyTo = String(payload.replyTo ?? payload.phone ?? "");
+        let sent = false;
+        if (replyTo) {
+          const sr = await sendBookingCancelConfirmation({
+            to: replyTo,
+            name: String(payload.fullName ?? ""),
+            date,
+            time,
+            fallbackText: cancelText,
+          }).catch(() => null);
+          sent = !!sr?.ok;
+        }
+        const messageId = payload.messageId as string | undefined;
+        if (messageId)
+          await db
+            .update(messages)
+            .set({ status: "replied", draftReply: sent ? cancelText : null, updatedAt: nowIso() })
+            .where(eq(messages.id, messageId));
+        return {
+          ok: true,
+          actionType,
+          detail: `התור בוטל — ${date} ${time}` + (sent ? "" : " (הודעת הביטול ללקוח לא נשלחה — לעדכן ידנית)"),
+          data: r.data ?? {},
+        };
       }
 
       case "update_crm": {

@@ -79,7 +79,7 @@ const KW = {
   barberPrice: /כמה עולה.*(תספורת|תור|זקן|החלק)|מחיר.*(תספורת|זקן)|תספורת.*כמה/i,
   apptNew: /תור|לתאם|לקבוע|פנוי|מקום|appointment|slot|book/i,
   apptConfirm: /התור שלי|מתי התור|לאשר את התור|מאשר.*תור/i,
-  apptChange: /לבטל.*תור|להזיז.*תור|לדחות.*תור|cancel|reschedule/i,
+  apptChange: /לבטל.*תור|להזיז.*תור|לדחות.*תור|(?:תבטל|תבטלי|תבטלו|ביטול).*(?:תור|אותו|אותה)|cancel|reschedule/i,
   clothing: /חולצה|מכנס|ג'?ינס|נעל|חגור|מעיל|סווצ'?ר|טישרט|בגד|מידה|צבע|size|shirt|pants|jacket|מלאי|יש לכם.*ב/i,
   price: /כמה עולה|מחיר|הנחה|מבצע|קופון|זול|ביוקר|price|discount|deal/i,
   order: /הזמנה|משלוח|חבילה|הגיע|order|shipment|delivery/i,

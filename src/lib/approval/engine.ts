@@ -33,6 +33,7 @@ export const ACTION_CATALOG = {
   follow_up: "yellow",
   update_crm: "yellow",
   book_appointment: "yellow",
+  cancel_appointment: "yellow",
   archive_email: "yellow",
   delete_email: "yellow",
   browser_action: "yellow",

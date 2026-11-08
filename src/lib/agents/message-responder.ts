@@ -9,7 +9,7 @@ import { updateMessage, MANUAL_REPLY_TOOL, type Message } from "@/lib/services/m
 import { executeAction } from "@/lib/services/action-executor";
 import { getAssistantMode } from "@/lib/services/workspaces";
 import { notifyOwnersOf } from "@/lib/services/notifications";
-import { getDayAvailability } from "@/lib/integrations/dalor-barber";
+import { getDayAvailability, findUpcomingAppointmentsByPhone } from "@/lib/integrations/dalor-barber";
 import { parseAppointmentDate, parseAppointmentTime } from "./appointment-helper";
 import type { MessageTriage } from "./message-triage";
 
@@ -136,7 +136,12 @@ async function composeDraft(
   msg: RespondInput["message"],
   facts: string,
   withIntro: boolean,
-): Promise<{ text: string; grounded: boolean; bookingApprovalPayload?: Record<string, unknown> }> {
+): Promise<{
+  text: string;
+  grounded: boolean;
+  bookingApprovalPayload?: Record<string, unknown>;
+  cancelApprovalPayload?: Record<string, unknown>;
+}> {
   const prefix = withIntro ? WELCOME + "\n\n" : "";
 
   // ── bare greeting → a warm welcome ───────────────────────────────
@@ -206,6 +211,37 @@ async function composeDraft(
     };
   }
 
+  // ── cancel an existing appointment: find it by phone → approval ───
+  if (triage.intent === "appointment_change" && /לבטל|תבטל|ביטול|cancel/i.test(msg.text)) {
+    let upcoming;
+    try {
+      upcoming = await findUpcomingAppointmentsByPhone(msg.authorHandle);
+    } catch {
+      return { text: prefix + HOLDING, grounded: false };
+    }
+    if (upcoming.length === 1) {
+      const a = upcoming[0];
+      return {
+        text: prefix + `מבטל לך את התור של ${heDate(a.date)} בשעה ${a.time} — מעביר לאישור וחוזר אלייך.`,
+        grounded: true,
+        cancelApprovalPayload: {
+          appointmentId: a.id,
+          fullName: a.fullName,
+          phone: msg.authorHandle,
+          date: a.date,
+          time: a.time,
+          messageId: msg.id,
+          replyTo: msg.authorHandle,
+        },
+      };
+    }
+    if (upcoming.length > 1) {
+      const list = upcoming.slice(0, 5).map((a) => `${heDate(a.date)} ${a.time}`).join(" · ");
+      return { text: prefix + `יש לך כמה תורים: ${list}. איזה מהם לבטל?`, grounded: true };
+    }
+    return { text: prefix + "לא מצאתי תור עתידי על המספר הזה. על איזה תור מדובר?", grounded: false };
+  }
+
   // ── routine facts (hours / location / pricelist) via LLM ──────────
   const route = ModelRouter.resolve("writing");
   if (route.mock || !facts) return { text: prefix + HOLDING, grounded: false };
@@ -249,7 +285,7 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
     ownerHandledRecently(msg.authorHandle),
   ]);
 
-  const { text: draft, grounded, bookingApprovalPayload } = await composeDraft(triage, msg, facts, withIntro);
+  const { text: draft, grounded, bookingApprovalPayload, cancelApprovalPayload } = await composeDraft(triage, msg, facts, withIntro);
 
   const who = msg.authorName || msg.authorHandle;
   // always carries the phone, even when we also know a name — so a push
@@ -271,6 +307,23 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
       riskLevel: "yellow",
       reason: "בקשת תור — לאשר לפני קביעה.",
       preview: `לקבוע תור ל-${who} (${msg.authorHandle}) — ${heDate(String(bookingApprovalPayload.date))} ${bookingApprovalPayload.time}`,
+      proposedBy: "social",
+    });
+    approvalId = a.id;
+  }
+
+  if (cancelApprovalPayload) {
+    const a = await createApproval({
+      userId: ownerUserId,
+      workspaceId,
+      title: `ביטול תור — ${who}, ${heDate(String(cancelApprovalPayload.date))} ${cancelApprovalPayload.time}`,
+      context: `וואטסאפ: "${msg.text}"`,
+      actionType: "cancel_appointment",
+      actionPayload: cancelApprovalPayload,
+      targetSystem: "dalor_barber",
+      riskLevel: "yellow",
+      reason: "הלקוח ביקש לבטל תור — לאשר לפני ביטול.",
+      preview: `לבטל את התור של ${who} (${msg.authorHandle}) — ${heDate(String(cancelApprovalPayload.date))} ${cancelApprovalPayload.time}`,
       proposedBy: "social",
     });
     approvalId = a.id;
@@ -335,6 +388,7 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
     AUTO_SEND_INTENTS.has(triage.intent) &&
     autoCount < MAX_CONSECUTIVE_AUTO &&
     !bookingApprovalPayload &&
+    !cancelApprovalPayload &&
     !ownerHandling;
 
   if (canAutoSend) {
@@ -377,7 +431,7 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
   });
 
   return {
-    action: bookingApprovalPayload ? "approval_created" : "drafted",
+    action: bookingApprovalPayload || cancelApprovalPayload ? "approval_created" : "drafted",
     detail: draft,
     approvalId,
   };

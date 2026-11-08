@@ -200,6 +200,33 @@ export async function listAppointments(params: { date?: string; from?: string; t
     .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
 }
 
+const last9 = (p: string) => String(p ?? "").replace(/\D/g, "").slice(-9);
+
+/** Upcoming (today onward), non-cancelled appointments booked under this phone number. */
+export async function findUpcomingAppointmentsByPhone(phone: string): Promise<AdminAppointment[]> {
+  const key = last9(phone);
+  if (key.length < 9) return [];
+  const from = todayISOInTz();
+  const to = new Date(Date.now() + 120 * 86400_000).toISOString().slice(0, 10);
+  const list = await listAppointments({ from, to });
+  return list.filter((a) => last9(a.phone) === key && a.date >= from);
+}
+
+/**
+ * Cancel one appointment through the booking system's own status change, so its
+ * outbox (pending reminders) and day lock are updated — not a raw row delete.
+ */
+export async function cancelAppointment(id: string): Promise<ConnectorActionResult> {
+  const { status, body } = await barberFetch<{ error?: string }>(`/api/admin/appointments/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: { status: "cancelled" },
+    admin: true,
+  });
+  if (status === 200) return { ok: true, detail: "התור בוטל", data: { id } };
+  if (status === 404) return { ok: false, detail: "", error: "התור לא נמצא (אולי כבר בוטל)" };
+  return { ok: false, detail: "", error: (body as { error?: string })?.error ?? `שגיאה מהמערכת (HTTP ${status ?? "no response"})` };
+}
+
 export class DalorBarberConnector extends BaseConnector {
   provider = "dalor_barber";
   displayName = "DALOR — תורים";
@@ -210,6 +237,7 @@ export class DalorBarberConnector extends BaseConnector {
       cap("check_availability", "בדיקת זמינות תור", "green"),
       cap("list_appointments", "רשימת תורים", "green"),
       cap("book_appointment", "קביעת תור", "yellow"),
+      cap("cancel_appointment", "ביטול תור", "yellow"),
     ];
   }
 
@@ -254,6 +282,7 @@ export class DalorBarberConnector extends BaseConnector {
         notes: payload.notes ? String(payload.notes) : undefined,
       });
     }
+    if (action === "cancel_appointment") return cancelAppointment(String(payload.appointmentId ?? ""));
     return { ok: false, detail: "", error: `פעולה לא נתמכת: ${action}` };
   }
 }

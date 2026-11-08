@@ -62,6 +62,8 @@ export const env = {
   metaOwnerUpdateTemplate: get("META_WA_OWNER_UPDATE_TEMPLATE", "owner_update"),
   // booking confirmation outside the 24h window: {{1}}=name, {{2}}=date, {{3}}=time, {{4}}=service
   metaBookingConfirmTemplate: get("META_WA_BOOKING_CONFIRM_TEMPLATE", "dalor_booking_confirm"),
+  // booking cancelled at the customer's request: {{1}}=name, {{2}}=date, {{3}}=time
+  metaBookingCancelConfirmTemplate: get("META_WA_BOOKING_CANCEL_CONFIRM_TEMPLATE", "dalor_booking_cancel_confirm"),
   metaTemplateLang: get("META_WA_TEMPLATE_LANG", "he"),
   // customer messages land on יאיר's line; resolve owner + business workspace
   whatsappOwnerEmail: get("WHATSAPP_OWNER_EMAIL", "yair@dalor.co.il"),
