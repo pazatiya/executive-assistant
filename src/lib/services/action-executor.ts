@@ -155,16 +155,9 @@ export async function executeAction(input: ExecuteInput): Promise<ExecuteResult>
         });
         if (!r.ok) return { ok: false, actionType, detail: "", error: r.error ?? "קביעת התור נכשלה" };
 
-        // tell the customer it's confirmed
-        const replyTo = String(payload.replyTo ?? payload.phone ?? "");
-        if (replyTo) {
-          await sendWhatsApp(
-            replyTo,
-            `נקבע לך תור ל-${date} בשעה ${time} ✂️ נתראה! אם צריך לשנות — פשוט תכתוב לי כאן.`,
-          ).catch(() => {
-            /* best effort */
-          });
-        }
+        // The customer-facing confirmation (and every other booking message: change,
+        // cancel, reminders...) is sent by the booking system itself (dalor-barber
+        // lib/notify.js) — sending it here too would double-message the customer.
         const messageId = payload.messageId as string | undefined;
         if (messageId)
           await db.update(messages).set({ status: "replied", updatedAt: nowIso() }).where(eq(messages.id, messageId));
