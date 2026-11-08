@@ -268,11 +268,17 @@ const send_message_now: ToolFn = async (ctx, input) => {
   if (m.channel !== "whatsapp") {
     return { ok: false, summary: `ערוץ ${m.channel} לא נתמך לשליחה מיידית — השתמש ב-draft_message_reply` };
   }
-  const { sendWhatsApp } = await import("@/lib/integrations/whatsapp-send");
-  const r = await sendWhatsApp(m.authorHandle, text);
+  const { sendWhatsAppWindowAware } = await import("@/lib/integrations/whatsapp-send");
+  const r = await sendWhatsAppWindowAware(m.authorHandle, text, m.authorName);
   if (!r.ok) return { ok: false, summary: `השליחה נכשלה: ${r.error ?? "שגיאה לא ידועה"}` };
   await db.update(messages).set({ status: "replied", draftReply: text }).where(eq(messages.id, messageId));
-  return { ok: true, summary: `נשלח מיד ל-${m.authorName || m.authorHandle}`, agent: "social", target: m.authorHandle };
+  return {
+    ok: true,
+    // Meta accepting the request is NOT delivery — it can still fail seconds later.
+    summary: `הבקשה נשלחה ל-${m.authorName || m.authorHandle}${r.via === "meta-template" ? " (בתבנית, כי עברו 24 שעות)" : ""}. עדיין אין אישור שההודעה הגיעה — הסטטוס (נמסרה/נקראה) יופיע בדף ההודעות, ואם נכשלה תגיע התראה. אל תגידי שהיא "נשלחה בהצלחה" או "נמסרה".`,
+    agent: "social",
+    target: m.authorHandle,
+  };
 };
 
 /** Forwards a photo the owner sent us (see imageMediaId in the conversation)

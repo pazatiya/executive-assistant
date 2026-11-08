@@ -4,7 +4,7 @@ import { emails, messages, tasks } from "@/lib/db/schema";
 import { nowIso } from "@/lib/utils";
 import { getConnector } from "@/lib/integrations/registry";
 import { createBooking } from "@/lib/integrations/dalor-barber";
-import { sendWhatsApp } from "@/lib/integrations/whatsapp-send";
+import { sendWhatsApp, sendWhatsAppWindowAware } from "@/lib/integrations/whatsapp-send";
 import { updateReminder } from "@/lib/services/reminders";
 
 export interface ExecuteInput {
@@ -76,7 +76,7 @@ export async function executeAction(input: ExecuteInput): Promise<ExecuteResult>
 
         let sent: { simulated: boolean; providerId?: string } = { simulated: true };
         if (channel === "whatsapp" && to) {
-          const r = await sendWhatsApp(to, text);
+          const r = await sendWhatsAppWindowAware(to, text, msg?.authorName);
           if (!r.ok) return { ok: false, actionType, detail: "", error: r.error ?? "WhatsApp send failed" };
           sent = { simulated: false, providerId: r.providerId };
         }
@@ -92,7 +92,7 @@ export async function executeAction(input: ExecuteInput): Promise<ExecuteResult>
           actionType,
           detail: sent.simulated
             ? "התגובה נשמרה ותישלח כשהערוץ יחובר (סימולציה)."
-            : "התגובה נשלחה בוואטסאפ.",
+            : "הבקשה נשלחה לוואטסאפ — אישור מסירה יופיע בדף ההודעות.",
           data: { ...sent },
         };
       }
@@ -115,7 +115,7 @@ export async function executeAction(input: ExecuteInput): Promise<ExecuteResult>
           customerName: payload.name as string | undefined,
         });
         if (!r.ok) return { ok: false, actionType, detail: "", error: r.error ?? "השליחה נכשלה" };
-        return { ok: true, actionType, detail: "ההודעה נשלחה בוואטסאפ.", data: { via: r.via, messageId: r.messageId } };
+        return { ok: true, actionType, detail: "הבקשה נשלחה לוואטסאפ — אישור מסירה יופיע בדף ההודעות.", data: { via: r.via, messageId: r.messageId } };
       }
 
       case "post_social": {
