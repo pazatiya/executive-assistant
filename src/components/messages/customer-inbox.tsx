@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Check, Clock, Paperclip, Send, X, MessageCircle, UserPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { timeAgo } from "@/lib/utils";
+import type { TraceEntry } from "@/lib/services/message-trace";
 
 export interface InboxMessage {
   id: string;
@@ -19,6 +20,7 @@ export interface InboxMessage {
   draftReply: string | null;
   receivedAt: string;
   mediaId: string | null;
+  trace?: TraceEntry[];
   delivery?: { status: "sent" | "delivered" | "read" | "failed"; at: string; error: string | null } | null;
 }
 
@@ -226,6 +228,13 @@ export function CustomerInbox({ messages }: { messages: InboxMessage[] }) {
                     <span className={`rounded px-1.5 py-0.5 text-[11px] ${st.cls}`}>{st.label}</span>
                   </div>
                   <p className={`mt-0.5 text-sm ${open ? "" : "line-clamp-1"} text-muted-foreground`}>{m.text}</p>
+                  {!open && m.trace && m.trace.length > 0 && (
+                    <p className={`mt-0.5 text-xs ${m.trace[m.trace.length - 1].sent ? "text-success" : "text-amber-500"}`}>
+                      {m.trace[m.trace.length - 1].sent
+                        ? "✓ נשלח ללקוח"
+                        : `✗ לא נשלח ללקוח — ${m.trace[m.trace.length - 1].reason ?? "ללא סיבה מתועדת"}`}
+                    </p>
+                  )}
                   {m.mediaId && m.text.startsWith("🎤") && (
                     // voice note: the transcript is the text above, the original is playable here
                     <audio
@@ -250,6 +259,25 @@ export function CustomerInbox({ messages }: { messages: InboxMessage[] }) {
 
               {open && (
                 <div className="mt-3 space-y-2">
+                  <div className="rounded-lg border px-3 py-2 text-xs">
+                    <div className="mb-1 font-medium">מה קרה עם ההודעה הזאת</div>
+                    {m.trace && m.trace.length > 0 ? (
+                      <ul className="space-y-1">
+                        {m.trace.map((t, i) => (
+                          <li key={i} className={t.sent ? "text-success" : "text-amber-500"}>
+                            <span className="text-muted-foreground">{timeAgo(t.at)} · </span>
+                            {t.sent ? `✓ נשלח ללקוח: "${t.text ?? ""}"` : `✗ לא נשלח ללקוח — ${t.reason ?? "ללא סיבה מתועדת"}`}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-muted-foreground">
+                        {m.status === "replied"
+                          ? `נשלח: ${m.draftReply ?? ""}`
+                          : "ללקוח לא נשלח כלום עד עכשיו (אין תיעוד לשליחה אוטומטית)."}
+                      </p>
+                    )}
+                  </div>
                   {m.status !== "replied" && m.status !== "ignored" ? (
                     <>
                       <div className="text-xs font-medium text-primary">תשובה מוצעת — ערוך ושלח:</div>

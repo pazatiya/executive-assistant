@@ -7,6 +7,7 @@ import { createApproval } from "@/lib/services/approvals";
 import { logActivity } from "@/lib/services/activity";
 import { updateMessage, MANUAL_REPLY_TOOL, type Message } from "@/lib/services/messages";
 import { executeAction } from "@/lib/services/action-executor";
+import { traceMessage } from "@/lib/services/message-trace";
 import { getAssistantMode } from "@/lib/services/workspaces";
 import { notifyOwnersOf } from "@/lib/services/notifications";
 import { getDayAvailability, findUpcomingAppointmentsByPhone } from "@/lib/integrations/dalor-barber";
@@ -184,7 +185,7 @@ async function composeDraft(
     const slotList = day.freeSlots.slice(0, 8).join(" · ");
     if (time && day.freeSlots.includes(time)) {
       return {
-        text: prefix + `${time} פנוי ל${heDate(date)} ✅ מעביר לאישור וחוזר אלייך.`,
+        text: prefix + `${time} פנוי ל${heDate(date)} ✅ מעביר לאישור של יאיר וחוזר אלייך לעדכן.`,
         grounded: true,
         bookingApprovalPayload: {
           fullName: msg.authorName ?? "לקוח וואטסאפ",
@@ -222,7 +223,7 @@ async function composeDraft(
     if (upcoming.length === 1) {
       const a = upcoming[0];
       return {
-        text: prefix + `מבטל לך את התור של ${heDate(a.date)} בשעה ${a.time} — מעביר לאישור וחוזר אלייך.`,
+        text: prefix + `מבטל לך את התור של ${heDate(a.date)} בשעה ${a.time} — מעביר לאישור של יאיר וחוזר אלייך לעדכן.`,
         grounded: true,
         cancelApprovalPayload: {
           appointmentId: a.id,
@@ -329,12 +330,61 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
     approvalId = a.id;
   }
 
+  const trace = (sent: boolean, text?: string | null, reason?: string | null) =>
+    traceMessage({ userId: ownerUserId, workspaceId, messageId: msg.id, sent, text, reason });
+
+  // Booking / cancel request → the customer gets an immediate, real "passing it to
+  // Yair for approval, will update you" (regardless of draft mode); the actual
+  // confirmation goes out only after the approval is executed.
+  if (approvalId) {
+    let why: string | null = null;
+    if (input.viaVoice) why = "הודעה קולית (תמלול אוטומטי) — לא שולחים אוטומטית";
+    else if (ownerHandling) why = "אחד מכם ענה ללקוח לאחרונה — לא נשלח אוטומטית";
+    else if (autoCount >= MAX_CONSECUTIVE_AUTO) why = "הגענו למגבלת תשובות אוטומטיות רצופות ללקוח";
+    let ackSent = false;
+    if (!why) {
+      const r = await executeAction({
+        userId: ownerUserId,
+        workspaceId,
+        actionType: "reply_message",
+        payload: { messageId: msg.id, to: msg.authorHandle, text: draft, channel: msg.channel },
+        targetSystem: msg.channel,
+      });
+      if (r.ok && r.data?.simulated !== true) ackSent = true;
+      else why = r.error ?? (r.data?.simulated ? "WhatsApp לא מחובר (מצב הדמיה)" : "השליחה נכשלה");
+    }
+    await trace(ackSent, draft, why);
+    await updateMessage(ownerUserId, msg.id, { status: "drafted", draftReply: ackSent ? null : draft, priority: "high" });
+    await notifyOwnersOf(workspaceId, {
+      fallbackUserId: ownerUserId,
+      kind: "proactive",
+      title: `${cancelApprovalPayload ? "ביטול תור" : "בקשת תור"} מ-${whoWithPhone} — ממתין לאישור`,
+      body: `"${msg.text}"\n\n${ackSent ? "ללקוח נשלח: מעביר לאישור וחוזר עם עדכון." : `ללקוח לא נשלח כלום (${why}).`}`,
+      href: "/approvals",
+      priority: "high",
+    }).catch(() => {});
+    return { action: "approval_created", detail: draft, approvalId };
+  }
+
+  // Why a plain reply is NOT auto-sent (shown to the owners in the inbox).
+  const whyNotAutoSent = (): string => {
+    if (input.viaVoice) return "הודעה קולית (תמלול אוטומטי) — לא שולחים אוטומטית";
+    if (mode !== "active") return "מצב טיוטות — שום דבר לא נשלח אוטומטית";
+    if (ownerHandling) return "אחד מכם ענה ללקוח לאחרונה — לא נשלח אוטומטית";
+    if (autoCount >= MAX_CONSECUTIVE_AUTO) return "הגענו למגבלת תשובות אוטומטיות רצופות ללקוח";
+    if (isComplaint) return "תלונה — דורש מענה אנושי";
+    if (!AUTO_SEND_INTENTS.has(triage.intent)) return "נושא שדורש החלטה אנושית";
+    if (!grounded) return "התשובה לא מבוססת על עובדה ודאית";
+    return "לא נשלח";
+  };
+
   // Intents where the assistant sends a fixed acknowledgment automatically
   // (in active mode) but ALWAYS alerts the owners to pick the thread up:
   // "talk to a human", and anything about clothing / a product / an order.
   const ACK_AND_ALERT = new Set(["wants_human", "clothing_availability", "clothing_order", "order_status"]);
   if (ACK_AND_ALERT.has(triage.intent)) {
     let acked = false;
+    let ackFailure: string | null = null;
     if (mode === "active" && !input.viaVoice && autoCount < MAX_CONSECUTIVE_AUTO && !ownerHandling) {
       const r = await executeAction({
         userId: ownerUserId,
@@ -344,7 +394,9 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
         targetSystem: msg.channel,
       });
       acked = r.ok && r.data?.simulated !== true;
+      if (!acked) ackFailure = r.error ?? "השליחה נכשלה";
     }
+    await trace(acked, draft, acked ? null : ackFailure ?? whyNotAutoSent());
     await updateMessage(ownerUserId, msg.id, {
       status: acked ? "replied" : "drafted",
       draftReply: draft,
@@ -391,6 +443,7 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
     !cancelApprovalPayload &&
     !ownerHandling;
 
+  let autoSendFailure: string | null = null;
   if (canAutoSend) {
     const r = await executeAction({
       userId: ownerUserId,
@@ -400,6 +453,7 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
       targetSystem: msg.channel,
     });
     if (r.ok && r.data?.simulated !== true) {
+      await trace(true, draft);
       await updateMessage(ownerUserId, msg.id, { status: "replied", draftReply: draft });
       await logActivity({
         userId: ownerUserId,
@@ -417,9 +471,11 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
       return { action: "auto_replied", detail: draft };
     }
     // send failed → fall through to draft
+    autoSendFailure = r.error ?? "השליחה נכשלה";
   }
 
   // draft-only: park the suggested reply, notify the owners
+  await trace(false, draft, autoSendFailure ? `שליחה אוטומטית נכשלה: ${autoSendFailure}` : whyNotAutoSent());
   await updateMessage(ownerUserId, msg.id, { status: "drafted", draftReply: draft });
   await notifyOwnersOf(workspaceId, {
     fallbackUserId: ownerUserId,

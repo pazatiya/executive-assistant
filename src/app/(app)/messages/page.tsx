@@ -11,6 +11,7 @@ import { getAssistantMode } from "@/lib/services/workspaces";
 import { CustomerInbox, type InboxMessage } from "@/components/messages/customer-inbox";
 import { timeAgo } from "@/lib/utils";
 import { latestReceiptsFor } from "@/lib/services/wa-receipts";
+import { tracesFor } from "@/lib/services/message-trace";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,9 @@ export default async function MessagesPage() {
   ]);
 
   const receipts = await latestReceiptsFor(sm.filter((m) => m.channel === "whatsapp").map((m) => m.authorHandle));
+  const traces = await tracesFor(sm.map((m) => m.id));
   const inbox: InboxMessage[] = sm.map((m) => ({
+    trace: traces.get(m.id) ?? [],
     delivery: m.channel === "whatsapp" ? receipts.get(m.authorHandle.replace(/\D/g, "")) ?? null : null,
     id: m.id,
     authorName: m.authorName,

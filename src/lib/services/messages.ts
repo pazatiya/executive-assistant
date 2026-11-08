@@ -1,3 +1,4 @@
+import { traceMessage } from "./message-trace";
 import { and, desc, eq, gte, inArray, type SQL } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { messages } from "@/lib/db/schema";
@@ -141,6 +142,14 @@ export async function replyToMessage(
     targetSystem: row.channel,
   });
   const sent = r.ok && r.data?.simulated !== true;
+  await traceMessage({
+    userId,
+    workspaceId: row.workspaceId,
+    messageId: row.id,
+    sent,
+    text: body,
+    reason: sent ? null : r.ok ? "WhatsApp לא מחובר (מצב הדמיה) — לא נשלח" : r.error ?? "השליחה נכשלה",
+  });
   await db
     .update(messages)
     .set({ status: sent ? "replied" : "drafted", draftReply: body, updatedAt: nowIso() })

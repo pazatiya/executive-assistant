@@ -4,6 +4,7 @@ import { emails, messages, tasks } from "@/lib/db/schema";
 import { nowIso } from "@/lib/utils";
 import { getConnector } from "@/lib/integrations/registry";
 import { createBooking, cancelAppointment } from "@/lib/integrations/dalor-barber";
+import { traceMessage } from "./message-trace";
 import { sendWhatsApp, sendWhatsAppWindowAware, sendBookingConfirmation, sendBookingCancelConfirmation } from "@/lib/integrations/whatsapp-send";
 import { updateReminder } from "@/lib/services/reminders";
 
@@ -161,32 +162,54 @@ export async function executeAction(input: ExecuteInput): Promise<ExecuteResult>
           time,
           notes: payload.notes ? String(payload.notes) : undefined,
         });
-        if (!r.ok) return { ok: false, actionType, detail: "", error: r.error ?? "קביעת התור נכשלה" };
+        const traceTo = (sent: boolean, text: string | null, reason: string | null) =>
+          payload.messageId
+            ? traceMessage({
+                userId: input.userId,
+                workspaceId: input.workspaceId ?? null,
+                messageId: String(payload.messageId),
+                sent,
+                text,
+                reason,
+              })
+            : Promise.resolve();
+        if (!r.ok) {
+          await traceTo(false, null, `קביעת התור נכשלה: ${r.error ?? "שגיאה לא ידועה"} — ללקוח לא נשלחה אישור`);
+          return { ok: false, actionType, detail: "", error: r.error ?? "קביעת התור נכשלה" };
+        }
 
         // tell the customer it's confirmed
         const confirmText = `נקבע לך תור ליום ${heDay(date)} בשעה ${time} ✂️ נתראה! אם צריך לשנות — פשוט תכתוב לי כאן.`;
         const replyTo = String(payload.replyTo ?? payload.phone ?? "");
+        let confirmSent = false;
+        let confirmWhy: string | null = replyTo ? null : "אין מספר טלפון ללקוח";
         if (replyTo) {
-          await sendBookingConfirmation({
+          const sr = await sendBookingConfirmation({
             to: replyTo,
             name: String(payload.fullName ?? ""),
             date,
             time,
             service: payload.service ? String(payload.service) : null,
             fallbackText: confirmText,
-          }).catch(() => {
-            /* best effort */
-          });
+          }).catch((e) => ({ ok: false as const, error: String(e?.message ?? e) }));
+          confirmSent = !!sr.ok;
+          if (!sr.ok) confirmWhy = sr.error ?? "השליחה נכשלה";
         }
+        await traceTo(confirmSent, confirmSent ? confirmText : null, confirmWhy);
         const messageId = payload.messageId as string | undefined;
         if (messageId)
           // draftReply must show what the customer actually got (the confirmation),
           // not the earlier "passing it for approval" draft that was never sent.
           await db
             .update(messages)
-            .set({ status: "replied", draftReply: replyTo ? confirmText : null, updatedAt: nowIso() })
+            .set({ status: "replied", draftReply: confirmSent ? confirmText : null, updatedAt: nowIso() })
             .where(eq(messages.id, messageId));
-        return { ok: true, actionType, detail: `תור נקבע — ${date} ${time}`, data: r.data ?? {} };
+        return {
+          ok: true,
+          actionType,
+          detail: `תור נקבע — ${date} ${time}` + (confirmSent ? "" : ` (אישור ללקוח לא נשלח: ${confirmWhy}) — לעדכן ידנית`),
+          data: r.data ?? {},
+        };
       }
 
       case "cancel_appointment": {
@@ -195,13 +218,28 @@ export async function executeAction(input: ExecuteInput): Promise<ExecuteResult>
         const time = String(payload.time ?? "");
         if (!appointmentId) return { ok: false, actionType, detail: "", error: "חסר מזהה תור לביטול" };
         const r = await cancelAppointment(appointmentId);
-        if (!r.ok) return { ok: false, actionType, detail: "", error: r.error ?? "ביטול התור נכשל" };
+        const traceCancel = (sent: boolean, text: string | null, reason: string | null) =>
+          payload.messageId
+            ? traceMessage({
+                userId: input.userId,
+                workspaceId: input.workspaceId ?? null,
+                messageId: String(payload.messageId),
+                sent,
+                text,
+                reason,
+              })
+            : Promise.resolve();
+        if (!r.ok) {
+          await traceCancel(false, null, `ביטול התור נכשל: ${r.error ?? "שגיאה לא ידועה"} — ללקוח לא נשלחה הודעה`);
+          return { ok: false, actionType, detail: "", error: r.error ?? "ביטול התור נכשל" };
+        }
 
         // answer the customer in the chat they asked in (the booking system only
         // messages customers who consented to WhatsApp reminders)
         const cancelText = `ביטלתי לך את התור ליום ${heDay(date)} בשעה ${time}. כשתרצה לקבוע תור חדש — פשוט תכתוב לי כאן ✂️`;
         const replyTo = String(payload.replyTo ?? payload.phone ?? "");
         let sent = false;
+        let sentWhy: string | null = replyTo ? null : "אין מספר טלפון ללקוח";
         if (replyTo) {
           const sr = await sendBookingCancelConfirmation({
             to: replyTo,
@@ -209,9 +247,11 @@ export async function executeAction(input: ExecuteInput): Promise<ExecuteResult>
             date,
             time,
             fallbackText: cancelText,
-          }).catch(() => null);
-          sent = !!sr?.ok;
+          }).catch((e) => ({ ok: false as const, error: String(e?.message ?? e) }));
+          sent = !!sr.ok;
+          if (!sr.ok) sentWhy = sr.error ?? "השליחה נכשלה";
         }
+        await traceCancel(sent, sent ? cancelText : null, sentWhy);
         const messageId = payload.messageId as string | undefined;
         if (messageId)
           await db
