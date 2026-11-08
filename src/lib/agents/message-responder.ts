@@ -142,6 +142,8 @@ async function composeDraft(
   grounded: boolean;
   bookingApprovalPayload?: Record<string, unknown>;
   cancelApprovalPayload?: Record<string, unknown>;
+  /** Why the draft is only a holding reply (shown to the owners as the reason). */
+  note?: string;
 }> {
   const prefix = withIntro ? WELCOME + "\n\n" : "";
 
@@ -217,8 +219,12 @@ async function composeDraft(
     let upcoming;
     try {
       upcoming = await findUpcomingAppointmentsByPhone(msg.authorHandle);
-    } catch {
-      return { text: prefix + HOLDING, grounded: false };
+    } catch (e) {
+      return {
+        text: prefix + HOLDING,
+        grounded: false,
+        note: `לא הצלחתי לבדוק את התורים של הלקוח: ${e instanceof Error ? e.message : String(e)}`,
+      };
     }
     if (upcoming.length === 1) {
       const a = upcoming[0];
@@ -286,7 +292,7 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
     ownerHandledRecently(msg.authorHandle),
   ]);
 
-  const { text: draft, grounded, bookingApprovalPayload, cancelApprovalPayload } = await composeDraft(triage, msg, facts, withIntro);
+  const { text: draft, grounded, bookingApprovalPayload, cancelApprovalPayload, note } = await composeDraft(triage, msg, facts, withIntro);
 
   const who = msg.authorName || msg.authorHandle;
   // always carries the phone, even when we also know a name — so a push
@@ -475,7 +481,7 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
   }
 
   // draft-only: park the suggested reply, notify the owners
-  await trace(false, draft, autoSendFailure ? `שליחה אוטומטית נכשלה: ${autoSendFailure}` : whyNotAutoSent());
+  await trace(false, draft, autoSendFailure ? `שליחה אוטומטית נכשלה: ${autoSendFailure}` : note ?? whyNotAutoSent());
   await updateMessage(ownerUserId, msg.id, { status: "drafted", draftReply: draft });
   await notifyOwnersOf(workspaceId, {
     fallbackUserId: ownerUserId,

@@ -208,8 +208,18 @@ export async function findUpcomingAppointmentsByPhone(phone: string): Promise<Ad
   if (key.length < 9) return [];
   const from = todayISOInTz();
   const to = new Date(Date.now() + 120 * 86400_000).toISOString().slice(0, 10);
-  const list = await listAppointments({ from, to });
-  return list.filter((a) => last9(a.phone) === key && a.date >= from);
+  const { status, body } = await barberFetch<AdminAppointment[]>(`/api/admin/appointments?from=${from}&to=${to}`, { admin: true });
+  // Fail loudly: an empty list because of a rejected admin key looks exactly like
+  // "customer has no appointment" and the customer would be told so.
+  if (status !== 200 || !Array.isArray(body))
+    throw new Error(
+      status === 401 || status === 403
+        ? "מערכת התורים דחתה את מפתח האדמין (DALOR_BARBER_ADMIN_KEY)"
+        : `מערכת התורים לא ענתה (HTTP ${status ?? "ללא תשובה"})`,
+    );
+  return body
+    .filter((a) => a.status !== "cancelled" && last9(a.phone) === key && a.date >= from)
+    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
 }
 
 /**
