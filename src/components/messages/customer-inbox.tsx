@@ -19,7 +19,15 @@ export interface InboxMessage {
   draftReply: string | null;
   receivedAt: string;
   mediaId: string | null;
+  delivery?: { status: "sent" | "delivered" | "read" | "failed"; at: string; error: string | null } | null;
 }
+
+const DELIVERY_META: Record<string, { label: string; cls: string }> = {
+  sent: { label: "✓ נשלחה", cls: "text-muted-foreground" },
+  delivered: { label: "✓✓ נמסרה", cls: "text-muted-foreground" },
+  read: { label: "✓✓ נקראה", cls: "text-sky-400" },
+  failed: { label: "✗ לא הגיעה", cls: "text-red-400" },
+};
 
 const CLS: Record<string, string> = {
   lead: "ליד",
@@ -291,6 +299,16 @@ export function CustomerInbox({ messages }: { messages: InboxMessage[] }) {
                       {m.status === "replied" ? (
                         <span className="flex items-center gap-1.5">
                           <Check className="size-3.5 text-success" /> נענה: {m.draftReply}
+                          {m.delivery ? (
+                            <span
+                              className={`ms-auto shrink-0 text-xs ${DELIVERY_META[m.delivery.status].cls}`}
+                              title={m.delivery.error ?? timeAgo(m.delivery.at)}
+                            >
+                              {DELIVERY_META[m.delivery.status].label}
+                            </span>
+                          ) : (
+                            <span className="ms-auto shrink-0 text-xs text-muted-foreground">ממתין לאישור מוואטסאפ</span>
+                          )}
                         </span>
                       ) : (
                         <span className="flex items-center gap-1.5">

@@ -77,6 +77,7 @@ export interface MetaStatusEvent {
   status: "sent" | "delivered" | "read" | "failed";
   to: string;
   errorSummary?: string;
+  at?: string;
 }
 
 /** Delivery/read receipts (and send failures) for messages we sent — separate from inbound text. */
@@ -92,6 +93,7 @@ export function parseMetaStatuses(raw: unknown): MetaStatusEvent[] {
           status: s.status,
           to: s.recipient_id ?? "",
           errorSummary: s.errors?.map((e) => `${e.code} ${e.title ?? e.message ?? ""}`).join("; "),
+          at: s.timestamp ? new Date(Number(s.timestamp) * 1000).toISOString() : undefined,
         });
       }
     }

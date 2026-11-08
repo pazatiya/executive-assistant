@@ -275,6 +275,25 @@ export const messages = sqliteTable(
   }),
 );
 
+/* ─────────────── WhatsApp delivery receipts (Meta statuses) ─────────────── */
+
+// One row per outbound WhatsApp message we sent (keyed by Meta's wamid), updated
+// as Meta reports sent -> delivered -> read, or failed. Keyed by recipient number
+// so the inbox can show "did my reply reach the customer" without every send path
+// having to remember the wamid.
+export const waReceipts = sqliteTable(
+  "wa_receipts",
+  {
+    wamid: text("wamid").primaryKey(),
+    toNumber: text("to_number").notNull(),
+    status: text("status").$type<"sent" | "delivered" | "read" | "failed">().notNull(),
+    errorSummary: text("error_summary"),
+    statusAt: text("status_at").notNull().default(now),
+    ...timestamps,
+  },
+  (t) => ({ toIdx: index("wa_receipts_to_idx").on(t.toNumber) }),
+);
+
 /* ───────────────────────────── documents ───────────────────────────── */
 
 export const documents = sqliteTable(

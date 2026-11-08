@@ -3,6 +3,7 @@ import { metaVerifyChallenge, parseMetaInboundAll, parseMetaStatuses, verifyMeta
 import { ingestWhatsAppMessage } from "@/lib/agents/inbound-pipeline";
 import { resolveWhatsAppTarget } from "@/lib/integrations/whatsapp-context";
 import { notifyOwnersOf } from "@/lib/services/notifications";
+import { recordReceipt } from "@/lib/services/wa-receipts";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,7 @@ export async function POST(req: Request) {
   // delivery/read receipts (and send failures) for messages we sent — logged
   // so "did it actually reach him" has a real answer, not just "we sent it".
   for (const s of parseMetaStatuses(body)) {
+    await recordReceipt(s).catch((e) => console.error("[meta-wa] receipt save failed", e));
     if (s.status === "failed") {
       console.error(`[meta-wa] ✗ FAILED to=${s.to} wamid=${s.wamid}${s.errorSummary ? ` (${s.errorSummary})` : ""}`);
       if (alreadyNotifiedFailure(s.wamid)) continue; // Meta can redeliver the same status event
