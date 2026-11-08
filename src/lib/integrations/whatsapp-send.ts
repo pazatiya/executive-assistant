@@ -27,7 +27,7 @@ export async function sendWhatsApp(
  * Owner-dictated message to a customer/contact. WhatsApp allows free text only
  * within 24h of the customer's last message; outside that window Meta rejects it
  * (error 131047) *after* accepting the request, so it looks sent but never arrives.
- * Outside the window we wrap the text in the approved `owner_message` template.
+ * Outside the window we wrap the text in the approved `dalor_note` template.
  */
 export async function sendWhatsAppWindowAware(
   to: string,

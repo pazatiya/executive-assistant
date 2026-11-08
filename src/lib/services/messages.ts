@@ -265,7 +265,7 @@ export async function reachOutToCustomer(input: {
  * Owner asks the assistant to send a specific message to a customer's number.
  * Inside the 24h service window a plain text goes out as-is; outside it (a cold
  * number, or last inbound > 24h ago) Meta only allows an approved template, so
- * the wording is wrapped in `owner_message` ({{1}}=name, {{2}}=body). Either way
+ * the wording is wrapped in `dalor_note` ({{1}}=name, {{2}}=body). Either way
  * the thread then shows up in the inbox.
  */
 export async function messageCustomer(input: {
