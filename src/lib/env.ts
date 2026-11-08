@@ -60,6 +60,8 @@ export const env = {
   // reminders/briefs/approvals the assistant sends to Paz/Yair themselves —
   // worded as a personal assistant, not the customer-service dalor_note
   metaOwnerUpdateTemplate: get("META_WA_OWNER_UPDATE_TEMPLATE", "owner_update"),
+  // booking confirmation outside the 24h window: {{1}}=name, {{2}}=date, {{3}}=time, {{4}}=service
+  metaBookingConfirmTemplate: get("META_WA_BOOKING_CONFIRM_TEMPLATE", "dalor_booking_confirm"),
   metaTemplateLang: get("META_WA_TEMPLATE_LANG", "he"),
   // customer messages land on יאיר's line; resolve owner + business workspace
   whatsappOwnerEmail: get("WHATSAPP_OWNER_EMAIL", "yair@dalor.co.il"),

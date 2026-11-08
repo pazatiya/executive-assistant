@@ -4,7 +4,7 @@ import { emails, messages, tasks } from "@/lib/db/schema";
 import { nowIso } from "@/lib/utils";
 import { getConnector } from "@/lib/integrations/registry";
 import { createBooking } from "@/lib/integrations/dalor-barber";
-import { sendWhatsApp, sendWhatsAppWindowAware } from "@/lib/integrations/whatsapp-send";
+import { sendWhatsApp, sendWhatsAppWindowAware, sendBookingConfirmation } from "@/lib/integrations/whatsapp-send";
 import { updateReminder } from "@/lib/services/reminders";
 
 export interface ExecuteInput {
@@ -155,9 +155,20 @@ export async function executeAction(input: ExecuteInput): Promise<ExecuteResult>
         });
         if (!r.ok) return { ok: false, actionType, detail: "", error: r.error ?? "קביעת התור נכשלה" };
 
-        // The customer-facing confirmation (and every other booking message: change,
-        // cancel, reminders...) is sent by the booking system itself (dalor-barber
-        // lib/notify.js) — sending it here too would double-message the customer.
+        // tell the customer it's confirmed
+        const replyTo = String(payload.replyTo ?? payload.phone ?? "");
+        if (replyTo) {
+          await sendBookingConfirmation({
+            to: replyTo,
+            name: String(payload.fullName ?? ""),
+            date,
+            time,
+            service: payload.service ? String(payload.service) : null,
+            fallbackText: `נקבע לך תור ל-${date} בשעה ${time} ✂️ נתראה! אם צריך לשנות — פשוט תכתוב לי כאן.`,
+          }).catch(() => {
+            /* best effort */
+          });
+        }
         const messageId = payload.messageId as string | undefined;
         if (messageId)
           await db.update(messages).set({ status: "replied", updatedAt: nowIso() }).where(eq(messages.id, messageId));
