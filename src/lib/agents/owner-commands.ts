@@ -81,10 +81,10 @@ export async function handleOwnerCommand(ownerUserId: string, text: string, medi
   // ── bare greeting → personal hello + what it can do ─────────────
   if (GREETING.test(body)) {
     return (
-      `היי${firstName ? " " + firstName : ""} 🙂 מה לעשות בשבילך?\n` +
+      `היי${firstName ? " " + firstName : ""}, כאן ג'ימי 🙂 מה לעשות בשבילך?\n` +
       "• תזכורת — \"תזכיר לי מחר ב-9 להתקשר לספק\"\n" +
-      "• מייל / הודעה — \"תשלחי מייל ל...\"\n" +
-      "• לחזור ללקוח — \"תחזרי ל-052... בקשר לחולצה\"\n" +
+      `• מייל / הודעה — "${gender === "נקבה" ? "תשלחי" : "תשלח"} מייל ל..."\n` +
+      `• לחזור ללקוח — "${gender === "נקבה" ? "תחזרי" : "תחזור"} ל-052... בקשר לחולצה"\n` +
       "• בדיקה — \"מה התורים היום?\" / \"סטטוס\" (אישורים ממתינים)"
     );
   }
