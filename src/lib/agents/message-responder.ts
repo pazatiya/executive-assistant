@@ -28,6 +28,8 @@ const AUTO_SEND_INTENTS = new Set([
 const HOLDING = "קיבלתי 🙏 בודק ומחזיר לך תשובה עוד מעט.";
 // customer wants a human — we ack and flag it, never keep chatting
 // complaint: never argue or improvise — just acknowledge and say it's being handled
+// voice note we couldn't transcribe — don't pretend we understood it
+const VOICE_FAILED_ACK = "קיבלנו את ההודעה הקולית, אבל לא הצלחנו לשמוע אותה בבירור 🙏 אפשר לכתוב לנו במה מדובר?";
 const COMPLAINT_ACK =
   "מצטערים לשמוע 🙏\n\n" +
   "העברנו את פנייתכם לטיפול הצוות, ונחזור אליכם בהקדם האפשרי.";
@@ -294,6 +296,33 @@ async function composeDraft(
 }
 
 /**
+ * One short courtesy line for a message that needs no action ("thanks", "I'll
+ * come tomorrow"). Returns null when no reply is warranted (a bare emoji / "ok"),
+ * so two polite messages never ping-pong forever.
+ */
+async function courtesyReply(text: string): Promise<string | null> {
+  const FALLBACK = /תודה|תודה רבה|thanks|thank you/i.test(text) ? "בשמחה 🙏" : null;
+  const route = ModelRouter.resolve("writing");
+  if (route.mock) return FALLBACK;
+  try {
+    const res = await ModelRouter.complete("writing", {
+      system:
+        "אתה ג'ימי, נציג השירות של DALOR (מספרה + בגדים לגבר). הלקוח שלח הודעת מידע/נימוס שלא דורשת פעולה. " +
+        "כתוב תגובה אחת קצרה מאוד בעברית (עד 8 מילים), בלשון רבים/ניטרלית, מותאמת להקשר: " +
+        "על תודה — 'בשמחה'; על 'אגיע מחר/בדרך' — משהו כמו 'מעולה, נשמח לראותכם'. " +
+        "בלי להבטיח כלום, בלי עובדות חדשות, בלי שאלות, אימוג'י אחד לכל היותר. " +
+        "אם ההודעה היא רק אימוג'י, 'אוקיי', 'סבבה', 'קיבלתי' או 'ביי' — החזר בדיוק: SKIP",
+      messages: [{ role: "user", content: `הודעת הלקוח: ${text}` }],
+    });
+    const out = res.text.trim();
+    if (!out || /^SKIP$/i.test(out) || out.length > 80) return null;
+    return out;
+  } catch {
+    return FALLBACK;
+  }
+}
+
+/**
  * Text of the customer's previous inbound message (if recent). Lets a follow-up
  * like "tomorrow at 17:00" be understood in the context of the welcome button
  * they tapped just before — the triage only ever sees one message at a time.
@@ -514,6 +543,47 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
     return { action: acked ? "auto_replied" : "drafted", detail: draft };
   }
 
+  // "Thanks" / "I'll come tomorrow" / "ok": no alert, no task — but a short,
+  // context-aware courtesy reply instead of leaving the customer hanging.
+  if (
+    triage.needsReply === false &&
+    !complaintLike &&
+    mode === "active" &&
+    autoCount < MAX_CONSECUTIVE_AUTO &&
+    !ownerHandling &&
+    !bookingApprovalPayload &&
+    !cancelApprovalPayload
+  ) {
+    const courtesy = await courtesyReply(msg.text);
+    if (courtesy) {
+      const r = await executeAction({
+        userId: ownerUserId,
+        workspaceId,
+        actionType: "reply_message",
+        payload: { messageId: msg.id, to: msg.authorHandle, text: courtesy, channel: msg.channel },
+        targetSystem: msg.channel,
+      });
+      if (r.ok && r.data?.simulated !== true) {
+        await trace(true, courtesy);
+        await updateMessage(ownerUserId, msg.id, { status: "replied", draftReply: courtesy });
+        await logActivity({
+          userId: ownerUserId,
+          workspaceId,
+          agent: "social",
+          action: `תשובה אוטומטית ל-${msg.authorHandle}: "${courtesy.slice(0, 100)}"`,
+          tool: msg.channel,
+          target: msg.id,
+          riskLevel: "green",
+          approvalStatus: "auto",
+          result: "success",
+          autoExecuted: true,
+          metadata: { intent: triage.intent, courtesy: true },
+        });
+        return { action: "auto_replied", detail: courtesy };
+      }
+    }
+  }
+
   // Complaints, price/discount questions and anything Jimmy doesn't understand:
   // the customer must never be left in silence. He gets a short acknowledgement
   // ("passing this on to be handled") and the owners get an alert; a human answers.
@@ -523,7 +593,14 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
     triage.intent === "price_or_discount" ||
     (triage.intent === "other" && triage.needsReply !== false && triage.classification !== "praise" && triage.classification !== "spam");
   if (SOFT_ACK) {
-    const ackText = complaintLike ? COMPLAINT_ACK : triage.intent === "price_or_discount" ? STORE_HOLDING : HOLDING;
+    const voiceFailed = msg.text.startsWith("🎤 [הודעה קולית — לא הצלחתי לתמלל");
+    const ackText = complaintLike
+      ? COMPLAINT_ACK
+      : voiceFailed
+        ? VOICE_FAILED_ACK
+        : triage.intent === "price_or_discount"
+          ? STORE_HOLDING
+          : HOLDING;
     let acked = false;
     let ackFailure: string | null = null;
     if (mode === "active" && autoCount < MAX_CONSECUTIVE_AUTO && !ownerHandling) {
