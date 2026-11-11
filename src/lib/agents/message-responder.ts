@@ -11,7 +11,7 @@ import { traceMessage } from "@/lib/services/message-trace";
 import { getAssistantMode } from "@/lib/services/workspaces";
 import { notifyOwnersOf } from "@/lib/services/notifications";
 import { getDayAvailability, findUpcomingAppointmentsByPhone } from "@/lib/integrations/dalor-barber";
-import { WELCOME, PRODUCTS_BUTTON, APPT_BUTTON, APPT_BUTTON_REPLY } from "@/lib/integrations/welcome";
+import { WELCOME, PRODUCTS_BUTTON, APPT_BUTTON, APPT_BUTTON_REPLY, PRODUCTS_BUTTON_REPLY } from "@/lib/integrations/welcome";
 import { parseAppointmentDate, parseAppointmentTime } from "./appointment-helper";
 import type { MessageTriage } from "./message-triage";
 
@@ -146,12 +146,7 @@ async function composeDraft(
   // ── bare greeting → a warm welcome ───────────────────────────────
   if (triage.intent === "greeting") {
     if (msg.text.trim() === APPT_BUTTON) return { text: APPT_BUTTON_REPLY, grounded: true };
-    if (msg.text.trim() === PRODUCTS_BUTTON) {
-      return {
-        text: "בשמחה 🙂 על איזה מוצר או הזמנה מדובר? כתבו לי מה מעניין אתכם ואבדוק מול החנות.",
-        grounded: true,
-      };
-    }
+    if (msg.text.trim() === PRODUCTS_BUTTON) return { text: PRODUCTS_BUTTON_REPLY, grounded: true };
     return {
       text: withIntro ? WELCOME : "היי 🙂 איך אפשר לעזור? תור, מחיר, שעות, כתובת או בגדים.",
       grounded: true,
