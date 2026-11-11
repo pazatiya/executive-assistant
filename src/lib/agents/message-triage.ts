@@ -66,7 +66,7 @@ needsReply: true רק אם הלקוח שואל שאלה, מבקש משהו, מת
 - "barber_pricelist": שואל כמה עולה תספורת / זקן / החלקה — מחירון מספרה קבוע בלבד.
 - "appointment_availability": רוצה לדעת אם יש תור פנוי / לתאם תור חדש.
 - "appointment_confirm": מאשר תור שכבר קיים / שואל מתי התור שלו.
-- "general_info": שאלה כללית על העסק שאינה שעות/כתובת/מחירון — איך משלמים (אשראי / ביט / פייבוקס / מזומן), כרטיס מתנה, משלוחים, החזרות.
+- "general_info": שאלה כללית על העסק שאינה שעות/כתובת/מחירון — איך משלמים (אשראי / ביט / פייבוקס / מזומן), כרטיס מתנה, עלות וזמן משלוח, החזרות והחלפות, מידות, קישור לאתר/אינסטגרם, מדיניות ביטול או איחור בתור.
 - "wants_human": מבקש לדבר עם נציג / בן אדם / מישהו אמיתי.
 - "clothing_availability": שואל אם יש פריט לבוש / מידה / צבע / מלאי בגדים.
 - "clothing_order": רוצה לקנות / להזמין בגד או נעליים ("אני רוצה להזמין", "יש לכם נעלי אסיקס", "רוצה חולצת פולו").
@@ -88,6 +88,7 @@ const KW = {
   apptChange: /לבטל.*תור|להזיז.*תור|לדחות.*תור|(?:תבטל|תבטלי|תבטלו|ביטול).*(?:תור|אותו|אותה)|cancel|reschedule/i,
   clothing: /חולצה|מכנס|ג'?ינס|נעל|חגור|מעיל|סווצ'?ר|טישרט|בגד|מידה|צבע|size|shirt|pants|jacket|מלאי|יש לכם.*ב/i,
   price: /כמה עולה|מחיר|הנחה|מבצע|קופון|זול|ביוקר|price|discount|deal/i,
+  shipReturnLinks: /(עלות|דמי|כמה עולה|כמה זמן).{0,6}משלוח|משלוח.{0,8}(עולה|עלות|כמה)|החזרה|להחזיר|להחליף|החלפה|אינסטגרם|אינסטה|אתר|קישור/i,
   generalInfo: /ביט\b|פייבוקס|פיי ?בוקס|paybox|אשראי|לשלם|תשלום|מזומן|גיפט|כרטיס מתנה/i,
   order: /הזמנה|משלוח|חבילה|הגיע|order|shipment|delivery/i,
   complaint: /גרוע|נורא|מאוכזב|כועס|לא מרוצה|בושה|תלונה|החזר כספי|refund|terrible|awful/i,
@@ -114,7 +115,8 @@ function heuristicTriage(text: string): MessageTriage {
   } else if (KW.clothing.test(t)) {
     intent = "clothing_availability";
     classification = "lead";
-  } else if (KW.price.test(t)) intent = "price_or_discount";
+  } else if (KW.shipReturnLinks.test(t)) intent = "general_info";
+  else if (KW.price.test(t)) intent = "price_or_discount";
   else if (KW.apptChange.test(t)) intent = "appointment_change";
   else if (KW.apptConfirm.test(t)) intent = "appointment_confirm";
   else if (KW.barberPrice.test(t)) intent = "barber_pricelist";

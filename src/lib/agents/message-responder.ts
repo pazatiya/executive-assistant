@@ -124,6 +124,14 @@ async function isFirstContact(channel: Message["channel"], authorHandle: string)
 
 const STATIC_FACTS = [
   "- תשלום: אפשר לשלם באשראי, בביט ובפייבוקס, דרך בוט ההזמנות של DALOR.",
+  "- משלוחים: עלות משלוח 35 ש\"ח, זמן אספקה עד 5 ימי עסקים.",
+  "- החלפות והחזרות: עד שבועיים מהקנייה, ורק אם הפריט לא נלבש. הלבשה תחתונה לא ניתנת להחלפה.",
+  "- חניה ונגישות: יש חניה ונגישות ליד העסק.",
+  "- בוט ההזמנות של DALOR (להזמנות ותשלום): וואטסאפ 050-4997233.",
+  "- אתר DALOR: https://dalor.co.il",
+  "- אינסטגרם DALOR: https://www.instagram.com/dalor_paz_yair",
+  "- מידות / טבלת מידות: אין לנו מידע מוכן — אומרים שבודקים מול החנות וחוזרים ללקוח.",
+  "- מדיניות ביטול או איחור בתור: אין לנו מידע מוכן — אומרים שבודקים מול יאיר וחוזרים ללקוח.",
 ];
 
 async function factsBlock(userId: string, workspaceId: string | null): Promise<string> {
