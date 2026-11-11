@@ -13,6 +13,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { env } from "@/lib/env";
 import { chatIdToNumber, type InboundMessage } from "./waha";
 
+import { WELCOME, WELCOME_BUTTONS } from "./welcome";
+
 export function metaWaConfigured(): boolean {
   return Boolean(env.metaWaToken && env.metaWaPhoneNumberId);
 }
@@ -189,6 +191,28 @@ async function postMessage(payload: Record<string, unknown>): Promise<{ ok: bool
 
 /** Send a plain-text WhatsApp message. Only allowed inside the 24h service window. */
 export async function sendViaMeta(to: string, text: string) {
+  // Jimmy's opening message goes out with quick-reply buttons; anything the
+  // responder appended after it (the answer to the customer's first question)
+  // follows as a normal text message.
+  if (text.startsWith(WELCOME)) {
+    const rest = text.slice(WELCOME.length).trim();
+    const r = await postMessage({
+      to: chatIdToNumber(to),
+      type: "interactive",
+      interactive: {
+        type: "button",
+        body: { text: WELCOME },
+        action: {
+          buttons: WELCOME_BUTTONS.map((title, i) => ({ type: "reply", reply: { id: `welcome_${i}`, title } })),
+        },
+      },
+    });
+    if (r.ok) {
+      if (rest) await postMessage({ to: chatIdToNumber(to), type: "text", text: { body: rest, preview_url: false } });
+      return r;
+    }
+    // buttons rejected → fall back to plain text so the customer still gets the welcome
+  }
   return postMessage({
     to: chatIdToNumber(to),
     type: "text",

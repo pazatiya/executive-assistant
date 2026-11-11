@@ -11,6 +11,7 @@ import { traceMessage } from "@/lib/services/message-trace";
 import { getAssistantMode } from "@/lib/services/workspaces";
 import { notifyOwnersOf } from "@/lib/services/notifications";
 import { getDayAvailability, findUpcomingAppointmentsByPhone } from "@/lib/integrations/dalor-barber";
+import { WELCOME, PRODUCTS_BUTTON } from "@/lib/integrations/welcome";
 import { parseAppointmentDate, parseAppointmentTime } from "./appointment-helper";
 import type { MessageTriage } from "./message-triage";
 
@@ -25,11 +26,6 @@ const AUTO_SEND_INTENTS = new Set([
 ]);
 
 const HOLDING = "קיבלתי 🙏 בודק ומחזיר לך תשובה עוד מעט.";
-const WELCOME =
-  "היי 👋 כאן ג'ימי, נציג השירות של DALOR.\n" +
-  "צריך לקבוע תור, לבדוק מחיר, שעות פתיחה, כתובת או לשאול על בגדים? אני כאן בשבילך.\n" +
-  "איך אפשר לעזור לך?\n" +
-  'אם תרצה לדבר עם נציג אנושי, פשוט כתוב "נציג".';
 // customer wants a human — we ack and flag it, never keep chatting
 const HANDOFF = "קיבלתי 🙏 העברתי את הפנייה שלך לנציג שירות, נחזור אליך בקרוב.";
 // clothing / product / order questions — iron rule, always check with the store
@@ -149,6 +145,12 @@ async function composeDraft(
 
   // ── bare greeting → a warm welcome ───────────────────────────────
   if (triage.intent === "greeting") {
+    if (msg.text.trim() === PRODUCTS_BUTTON) {
+      return {
+        text: "בשמחה 🙂 על איזה מוצר או הזמנה מדובר? כתבו לי מה מעניין אתכם ואבדוק מול החנות.",
+        grounded: true,
+      };
+    }
     return {
       text: withIntro ? WELCOME : "היי 🙂 איך אפשר לעזור? תור, מחיר, שעות, כתובת או בגדים.",
       grounded: true,
@@ -283,7 +285,13 @@ async function composeDraft(
  * active mode: whitelisted routine answers send automatically, rest still draft.
  */
 export async function respondToMessage(input: RespondInput): Promise<RespondResult> {
-  const { message: msg, triage, ownerUserId, workspaceId } = input;
+  const { message: msg, ownerUserId, workspaceId } = input;
+  // Tapping "מוצרים והזמנות" on the welcome buttons isn't a real order question yet —
+  // answer with a follow-up prompt, no store alert.
+  const triage: MessageTriage =
+    msg.text.trim() === PRODUCTS_BUTTON
+      ? { ...input.triage, intent: "greeting", classification: "other", needsReply: false, canAutoReply: true }
+      : input.triage;
   const [withIntro, facts, mode, autoCount, ownerHandling] = await Promise.all([
     isFirstContact(msg.channel, msg.authorHandle),
     factsBlock(ownerUserId, workspaceId),
