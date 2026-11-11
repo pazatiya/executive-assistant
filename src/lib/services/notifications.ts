@@ -98,9 +98,14 @@ export async function notifyWorkspace(
     .select({ userId: workspaceMembers.userId })
     .from(workspaceMembers)
     .where(eq(workspaceMembers.workspaceId, workspaceId));
-  await Promise.all(
-    members.map((m) => notify({ ...input, userId: m.userId, workspaceId }).catch(() => {})),
+  const results = await Promise.allSettled(
+    members.map((m) => notify({ ...input, userId: m.userId, workspaceId })),
   );
+  // one owner failing is fine; ALL failing must surface (callers that promise
+  // the customer a hand-off rely on this) — best-effort callers already .catch().
+  if (results.length > 0 && results.every((r) => r.status === "rejected")) {
+    throw (results[0] as PromiseRejectedResult).reason;
+  }
 }
 
 /** A specific user only if they belong to the workspace (falls back to user). */

@@ -27,7 +27,11 @@ const AUTO_SEND_INTENTS = new Set([
 
 const HOLDING = "קיבלתי 🙏 בודק ומחזיר לך תשובה עוד מעט.";
 // customer wants a human — we ack and flag it, never keep chatting
-const HANDOFF = "קיבלתי 🙏 העברתי את הפנייה שלך לנציג שירות, נחזור אליך בקרוב.";
+const HANDOFF =
+  "בשמחה!\n\n" +
+  "אני מעביר את פנייתכם לנציג מצוות DALOR, שימשיך את הטיפול בבקשתכם.\n\n" +
+  "נציג יחזור אליכם בהקדם האפשרי.\n\n" +
+  "תודה על הסבלנות! 🖤";
 // clothing / product / order questions — iron rule, always check with the store
 const STORE_HOLDING = "בודק מול החנות מה יש ומחזיר לך תשובה בהקדם 👕";
 
@@ -395,7 +399,28 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
   if (ACK_AND_ALERT.has(triage.intent)) {
     let acked = false;
     let ackFailure: string | null = null;
-    if (mode === "active" && !input.viaVoice && autoCount < MAX_CONSECUTIVE_AUTO && !ownerHandling) {
+    const isHuman = triage.intent === "wants_human";
+    // "Talk to a human": the customer is told a representative will follow up ONLY
+    // after the hand-off really happened — i.e. the owners were notified (app row +
+    // push + WhatsApp). If that fails, nothing is promised to the customer.
+    let handedOff = !isHuman;
+    if (isHuman) {
+      try {
+        await notifyOwnersOf(workspaceId, {
+          fallbackUserId: ownerUserId,
+          kind: "proactive",
+          title: `🙋 ${whoWithPhone} מבקש/ת לדבר עם נציג`,
+          body: `"${msg.text}"\n\nהיכנסו ל-הודעות וענו.`,
+          href: "/messages",
+          priority: "urgent",
+        });
+        handedOff = true;
+      } catch (e) {
+        console.error("[handoff] owner notification failed — not promising a rep to the customer", e);
+        ackFailure = "ההעברה לנציג נכשלה — לא נשלחה הבטחה ללקוח";
+      }
+    }
+    if (handedOff && mode === "active" && !input.viaVoice && autoCount < MAX_CONSECUTIVE_AUTO && !ownerHandling) {
       const r = await executeAction({
         userId: ownerUserId,
         workspaceId,
@@ -430,8 +455,7 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
       autoExecuted: acked,
       metadata: { intent: triage.intent },
     });
-    const isHuman = triage.intent === "wants_human";
-    await notifyOwnersOf(workspaceId, {
+    if (!isHuman) await notifyOwnersOf(workspaceId, {
       fallbackUserId: ownerUserId,
       kind: "proactive",
       title: isHuman ? `🙋 ${whoWithPhone} מבקש/ת לדבר עם נציג` : `👕 ${whoWithPhone} — שאלת בגדים/הזמנה`,
@@ -504,7 +528,7 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
     body: msg.text.slice(0, 140),
     href: "/messages",
     priority: isComplaint ? "urgent" : triage.priority === "urgent" ? "high" : "normal",
-  });
+  }).catch(() => {});
 
   return {
     action: bookingApprovalPayload || cancelApprovalPayload ? "approval_created" : "drafted",
