@@ -191,6 +191,9 @@ async function postMessage(payload: Record<string, unknown>): Promise<{ ok: bool
 
 /** Send a plain-text WhatsApp message. Only allowed inside the 24h service window. */
 export async function sendViaMeta(to: string, text: string) {
+  // WhatsApp bold is a single *asterisk*; Markdown-style **double** (often produced
+  // by the AI) would show up as literal stars — normalise before sending.
+  text = text.replace(/\*\*(.+?)\*\*/gs, "*$1*");
   // Jimmy's opening message goes out with quick-reply buttons; anything the
   // responder appended after it (the answer to the customer's first question)
   // follows as a normal text message.
