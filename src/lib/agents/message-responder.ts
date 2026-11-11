@@ -280,6 +280,29 @@ async function composeDraft(
 }
 
 /**
+ * Text of the customer's previous inbound message (if recent). Lets a follow-up
+ * like "tomorrow at 17:00" be understood in the context of the welcome button
+ * they tapped just before — the triage only ever sees one message at a time.
+ */
+async function previousInboundText(msg: Message): Promise<string | null> {
+  const since = new Date(Date.now() - AUTO_REPLY_WINDOW_MS).toISOString();
+  const rows = await db
+    .select({ id: messages.id, text: messages.text })
+    .from(messages)
+    .where(
+      and(
+        eq(messages.channel, msg.channel),
+        eq(messages.authorHandle, msg.authorHandle),
+        eq(messages.source, "live"),
+        gt(messages.receivedAt, since),
+      ),
+    )
+    .orderBy(desc(messages.receivedAt))
+    .limit(5);
+  return rows.find((r) => r.id !== msg.id)?.text?.trim() ?? null;
+}
+
+/**
  * Handle a freshly-triaged customer message.
  * draft_only mode: never sends — always a draft the owner reviews in the app.
  * active mode: whitelisted routine answers send automatically, rest still draft.
@@ -288,10 +311,19 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
   const { message: msg, ownerUserId, workspaceId } = input;
   // Tapping "מוצרים והזמנות" on the welcome buttons isn't a real order question yet —
   // answer with a follow-up prompt, no store alert.
-  const triage: MessageTriage =
-    msg.text.trim() === PRODUCTS_BUTTON || msg.text.trim() === APPT_BUTTON
-      ? { ...input.triage, intent: "greeting", classification: "other", needsReply: false, canAutoReply: true }
-      : input.triage;
+  const isButton = msg.text.trim() === PRODUCTS_BUTTON || msg.text.trim() === APPT_BUTTON;
+  let triage: MessageTriage = isButton
+    ? { ...input.triage, intent: "greeting", classification: "other", needsReply: false, canAutoReply: true }
+    : input.triage;
+  // Conversation continues after a welcome button: keep the context of what they picked.
+  if (!isButton && (triage.intent === "other" || triage.intent === "greeting")) {
+    const prev = await previousInboundText(msg);
+    if (prev === APPT_BUTTON) {
+      triage = { ...triage, intent: "appointment_availability", classification: "lead", needsReply: true, canAutoReply: true };
+    } else if (prev === PRODUCTS_BUTTON) {
+      triage = { ...triage, intent: "clothing_availability", classification: "lead", needsReply: true, canAutoReply: false };
+    }
+  }
   const [withIntro, facts, mode, autoCount, ownerHandling] = await Promise.all([
     isFirstContact(msg.channel, msg.authorHandle),
     factsBlock(ownerUserId, workspaceId),
