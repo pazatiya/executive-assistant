@@ -355,6 +355,8 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
       reason: "בקשת תור — לאשר לפני קביעה.",
       preview: `לקבוע תור ל-${who} (${msg.authorHandle}) — ${heDate(String(bookingApprovalPayload.date))} ${bookingApprovalPayload.time}`,
       proposedBy: "social",
+      // the proactive alert below already tells the owners (and what the customer was sent) — one ping, not two
+      notifyOwners: false,
     });
     approvalId = a.id;
   }
@@ -372,6 +374,8 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
       reason: "הלקוח ביקש לבטל תור — לאשר לפני ביטול.",
       preview: `לבטל את התור של ${who} (${msg.authorHandle}) — ${heDate(String(cancelApprovalPayload.date))} ${cancelApprovalPayload.time}`,
       proposedBy: "social",
+      // the proactive alert below already tells the owners (and what the customer was sent) — one ping, not two
+      notifyOwners: false,
     });
     approvalId = a.id;
   }
