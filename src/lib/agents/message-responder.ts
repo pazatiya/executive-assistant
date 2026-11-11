@@ -486,8 +486,10 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
   await updateMessage(ownerUserId, msg.id, { status: "drafted", draftReply: draft });
   const needsFollowUp =
     isComplaint ||
-    ["lead", "question", "complaint", "needs_human"].includes(triage.classification) ||
-    !["greeting"].includes(triage.intent) && triage.intent !== "other";
+    (typeof triage.needsReply === "boolean"
+      ? triage.needsReply
+      : ["lead", "question", "needs_human"].includes(triage.classification) ||
+        (triage.intent !== "greeting" && triage.intent !== "other"));
   await notifyOwnersOf(workspaceId, {
     fallbackUserId: ownerUserId,
     // WhatsApp ping ("proactive") only when someone needs to get back to the

@@ -42,6 +42,8 @@ export interface MessageTriage {
   intent: IntentCategory;
   /** true only when intent ∈ AUTO_REPLY_INTENTS and nothing else blocks it */
   canAutoReply: boolean;
+  /** Customer expects an answer/action (question, request, complaint). False for pure FYI: "I'll come tomorrow", "thanks", "ok". */
+  needsReply?: boolean;
   summary: string;
 }
 
@@ -52,8 +54,10 @@ const HE_SYSTEM = `אתה מסווג הודעה נכנסת מלקוח לעסק D
  "sentiment": "positive"|"neutral"|"negative",
  "priority": "low"|"normal"|"high"|"urgent",
  "intent": "greeting"|"opening_hours"|"location"|"barber_pricelist"|"appointment_availability"|"appointment_confirm"|"wants_human"|"clothing_availability"|"clothing_order"|"price_or_discount"|"appointment_change"|"order_status"|"complaint"|"other",
+ "needsReply": true|false,
  "summary": "משפט אחד בעברית"
 }
+needsReply: true רק אם הלקוח שואל שאלה, מבקש משהו, מתלונן או מצפה שיחזרו אליו. false להודעת מידע/עדכון בלבד שלא דורשת תגובה — "אגיע מחר", "אני בדרך", "תודה", "אוקיי", "סבבה", "קיבלתי", אימוג'י.
 כללי intent:
 - "greeting": רק ברכה בלי שאלה — "היי" / "שלום" / "בוקר טוב".
 - "opening_hours": שואל מתי פתוח / שעות.
@@ -176,6 +180,7 @@ export async function triageMessage(input: {
       priority: (p.priority as MessageTriage["priority"]) ?? base.priority,
       intent,
       canAutoReply,
+      needsReply: typeof p.needsReply === "boolean" ? p.needsReply : undefined,
       summary: p.summary ?? base.summary,
     };
   } catch {
