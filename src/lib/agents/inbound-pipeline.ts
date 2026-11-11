@@ -14,6 +14,7 @@ import { createInboundMessage, findMessageByExternalId, updateMessage } from "@/
 import { triageMessage } from "@/lib/agents/message-triage";
 import { respondToMessage } from "@/lib/agents/message-responder";
 import { runAutomations } from "@/lib/automation/engine";
+import { notifyOwnersOf } from "@/lib/services/notifications";
 import { transcribeVoiceMessage } from "@/lib/integrations/transcribe";
 
 export type IngestResult =
@@ -118,6 +119,15 @@ export async function ingestWhatsAppMessage(msg: InboundMessage | null): Promise
     });
   } catch (e) {
     console.error("respondToMessage failed", e);
+    // Never let a customer message vanish silently: the owners must at least know it arrived.
+    await notifyOwnersOf(target.workspaceId, {
+      fallbackUserId: target.userId,
+      kind: "proactive",
+      title: `הודעה מ-${msg.authorName ? `${msg.authorName} (${msg.fromNumber})` : msg.fromNumber} — לא הצלחתי לענות`,
+      body: `"${(msg.text ?? "").slice(0, 140)}"\n\nהמערכת נתקלה בתקלה ולא ענתה. היכנסו ל-הודעות וענו.`,
+      href: "/messages",
+      priority: "high",
+    }).catch(() => {});
   }
   console.log(`[inbound] intent=${triage.intent} outcome=${responded?.action ?? "silent"} messageId=${created.id}`);
 

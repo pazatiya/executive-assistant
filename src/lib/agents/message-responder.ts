@@ -474,6 +474,16 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
         autoExecuted: true,
         metadata: { intent: triage.intent, text: draft },
       });
+      // FYI to the owners (app + push + WhatsApp): a customer wrote and the
+      // assistant answered by itself — previously this path was completely silent.
+      await notifyOwnersOf(workspaceId, {
+        fallbackUserId: ownerUserId,
+        kind: "proactive",
+        title: `הודעה מ-${whoWithPhone} — ג'ימי ענה`,
+        body: `"${msg.text.slice(0, 140)}"\n\nנשלח ללקוח: "${draft.slice(0, 300)}"`,
+        href: "/messages",
+        priority: "normal",
+      }).catch(() => {});
       return { action: "auto_replied", detail: draft };
     }
     // send failed → fall through to draft
@@ -485,8 +495,10 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
   await updateMessage(ownerUserId, msg.id, { status: "drafted", draftReply: draft });
   await notifyOwnersOf(workspaceId, {
     fallbackUserId: ownerUserId,
-    kind: isComplaint ? "proactive" : "info",
-    title: isComplaint ? `⚠️ תלונה מ-${whoWithPhone}` : `הודעה מ-${whoWithPhone}`,
+    // "proactive" (not "info") so the owners also get a WhatsApp ping for every
+    // customer message that was left as a draft — "info" is app+push only.
+    kind: "proactive",
+    title: isComplaint ? `⚠️ תלונה מ-${whoWithPhone}` : `הודעה מ-${whoWithPhone} — ממתינה לך`,
     body: msg.text.slice(0, 140),
     href: "/messages",
     priority: isComplaint ? "urgent" : triage.priority === "urgent" ? "high" : "normal",
