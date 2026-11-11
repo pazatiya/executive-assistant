@@ -547,7 +547,8 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
   // context-aware courtesy reply instead of leaving the customer hanging.
   if (
     triage.needsReply === false &&
-    !complaintLike &&
+    !isComplaint &&
+    triage.intent !== "complaint" &&
     mode === "active" &&
     autoCount < MAX_CONSECUTIVE_AUTO &&
     !ownerHandling &&
