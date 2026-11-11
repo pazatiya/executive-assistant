@@ -84,6 +84,7 @@ export const AUTO_REPLY_INTENTS = new Set([
   "barber_pricelist",
   "appointment_availability",
   "appointment_confirm",
+  "general_info", // answered only from the knowledge base (payments, etc.)
 ]);
 
 export interface ClassifyResult {

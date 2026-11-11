@@ -25,6 +25,7 @@ export type IntentCategory =
   | "barber_pricelist"
   | "appointment_availability"
   | "appointment_confirm"
+  | "general_info" // general business info answered from the knowledge base: payment methods, etc.
   // ── always a person decides ─────────────────────────────────
   | "wants_human" // asked to talk to a real person / representative
   | "clothing_availability" // IRON RULE: catalog is not stock — never say "we don't have it"
@@ -53,7 +54,7 @@ const HE_SYSTEM = `אתה מסווג הודעה נכנסת מלקוח לעסק D
  "classification": "lead"|"question"|"complaint"|"spam"|"praise"|"needs_human"|"other",
  "sentiment": "positive"|"neutral"|"negative",
  "priority": "low"|"normal"|"high"|"urgent",
- "intent": "greeting"|"opening_hours"|"location"|"barber_pricelist"|"appointment_availability"|"appointment_confirm"|"wants_human"|"clothing_availability"|"clothing_order"|"price_or_discount"|"appointment_change"|"order_status"|"complaint"|"other",
+ "intent": "greeting"|"opening_hours"|"location"|"barber_pricelist"|"appointment_availability"|"appointment_confirm"|"general_info"|"wants_human"|"clothing_availability"|"clothing_order"|"price_or_discount"|"appointment_change"|"order_status"|"complaint"|"other",
  "needsReply": true|false,
  "summary": "משפט אחד בעברית"
 }
@@ -65,6 +66,7 @@ needsReply: true רק אם הלקוח שואל שאלה, מבקש משהו, מת
 - "barber_pricelist": שואל כמה עולה תספורת / זקן / החלקה — מחירון מספרה קבוע בלבד.
 - "appointment_availability": רוצה לדעת אם יש תור פנוי / לתאם תור חדש.
 - "appointment_confirm": מאשר תור שכבר קיים / שואל מתי התור שלו.
+- "general_info": שאלה כללית על העסק שאינה שעות/כתובת/מחירון — איך משלמים (אשראי / ביט / פייבוקס / מזומן), כרטיס מתנה, משלוחים, החזרות.
 - "wants_human": מבקש לדבר עם נציג / בן אדם / מישהו אמיתי.
 - "clothing_availability": שואל אם יש פריט לבוש / מידה / צבע / מלאי בגדים.
 - "clothing_order": רוצה לקנות / להזמין בגד או נעליים ("אני רוצה להזמין", "יש לכם נעלי אסיקס", "רוצה חולצת פולו").
@@ -86,6 +88,7 @@ const KW = {
   apptChange: /לבטל.*תור|להזיז.*תור|לדחות.*תור|(?:תבטל|תבטלי|תבטלו|ביטול).*(?:תור|אותו|אותה)|cancel|reschedule/i,
   clothing: /חולצה|מכנס|ג'?ינס|נעל|חגור|מעיל|סווצ'?ר|טישרט|בגד|מידה|צבע|size|shirt|pants|jacket|מלאי|יש לכם.*ב/i,
   price: /כמה עולה|מחיר|הנחה|מבצע|קופון|זול|ביוקר|price|discount|deal/i,
+  generalInfo: /ביט\b|פייבוקס|פיי ?בוקס|paybox|אשראי|לשלם|תשלום|מזומן|גיפט|כרטיס מתנה/i,
   order: /הזמנה|משלוח|חבילה|הגיע|order|shipment|delivery/i,
   complaint: /גרוע|נורא|מאוכזב|כועס|לא מרוצה|בושה|תלונה|החזר כספי|refund|terrible|awful/i,
   praise: /תודה רבה|מהמם|מדהים|אלופים|כפרה|פצצה|thank you|amazing|great/i,
@@ -120,6 +123,7 @@ function heuristicTriage(text: string): MessageTriage {
     classification = "lead";
   } else if (KW.hours.test(t)) intent = "opening_hours";
   else if (KW.location.test(t)) intent = "location";
+  else if (KW.generalInfo.test(t)) intent = "general_info";
   else if (KW.order.test(t)) intent = "order_status";
 
   const sentiment: MessageTriage["sentiment"] = KW.complaint.test(t)

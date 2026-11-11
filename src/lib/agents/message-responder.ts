@@ -23,6 +23,7 @@ const AUTO_SEND_INTENTS = new Set([
   "barber_pricelist",
   "appointment_availability",
   "appointment_confirm",
+  "general_info",
 ]);
 
 const HOLDING = "קיבלתי 🙏 בודק ומחזיר לך תשובה עוד מעט.";
@@ -121,13 +122,18 @@ async function isFirstContact(channel: Message["channel"], authorHandle: string)
   return Date.now() - new Date(previous.receivedAt).getTime() > INTRO_GAP_MS;
 }
 
+const STATIC_FACTS = [
+  "- תשלום: אפשר לשלם באשראי, בביט ובפייבוקס, דרך בוט ההזמנות של DALOR.",
+];
+
 async function factsBlock(userId: string, workspaceId: string | null): Promise<string> {
   const mems = await listMemories(userId, {
     workspaceId: workspaceId ?? undefined,
     types: ["knowledge", "permanent"],
   });
-  if (!mems.length) return "";
-  return mems.map((m) => `- ${m.subject}: ${m.content}`).join("\n");
+  const lines = mems.map((m) => `- ${m.subject}: ${m.content}`);
+  // fixed business facts (owner-confirmed) — always available, on top of the /memory page
+  return [...STATIC_FACTS, ...lines].join("\n");
 }
 
 function heDate(iso: string): string {
@@ -592,6 +598,7 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
   const SOFT_ACK =
     complaintLike ||
     triage.intent === "price_or_discount" ||
+    (triage.intent === "general_info" && !grounded) ||
     (triage.intent === "other" && triage.needsReply !== false && triage.classification !== "praise" && triage.classification !== "spam");
   if (SOFT_ACK) {
     const voiceFailed = msg.text.startsWith("🎤 [הודעה קולית — לא הצלחתי לתמלל");
