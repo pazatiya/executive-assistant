@@ -7,9 +7,14 @@ export const WELCOME =
   "אפשר לבחור באחת מהאפשרויות הבאות או פשוט לכתוב לי במה אוכל לעזור.";
 
 // Meta limits: max 3 buttons, title ≤ 20 chars. The tapped title comes back as the customer's text.
-export const WELCOME_BUTTONS = ["קביעת תור למספרה", "מוצרים והזמנות", "שיחה עם נציג"] as const;
-export const PRODUCTS_BUTTON = WELCOME_BUTTONS[1];
-export const APPT_BUTTON = WELCOME_BUTTONS[0];
+export const WELCOME_BUTTONS = ["💈 קביעת תור למספרה", "🛍️ מוצרים והזמנות", "🎧 שיחה עם נציג"] as const;
+
+/** The tapped button comes back as plain text incl. its emoji — compare on the words only. */
+export function buttonKey(text: string | null | undefined): string {
+  return (text ?? "").replace(/^[^\p{L}\p{N}]+/u, "").trim();
+}
+export const PRODUCTS_BUTTON = buttonKey(WELCOME_BUTTONS[1]);
+export const APPT_BUTTON = buttonKey(WELCOME_BUTTONS[0]);
 export const APPT_BUTTON_REPLY =
   "בשמחה! 💈\n\n" +
   "אשמח לסייע בקביעת תור למספרת DALOR.\n\n" +

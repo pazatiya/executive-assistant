@@ -11,7 +11,7 @@ import { traceMessage } from "@/lib/services/message-trace";
 import { getAssistantMode } from "@/lib/services/workspaces";
 import { notifyOwnersOf } from "@/lib/services/notifications";
 import { getDayAvailability, findUpcomingAppointmentsByPhone } from "@/lib/integrations/dalor-barber";
-import { WELCOME, PRODUCTS_BUTTON, APPT_BUTTON, APPT_BUTTON_REPLY, PRODUCTS_BUTTON_REPLY } from "@/lib/integrations/welcome";
+import { WELCOME, PRODUCTS_BUTTON, APPT_BUTTON, APPT_BUTTON_REPLY, PRODUCTS_BUTTON_REPLY, buttonKey } from "@/lib/integrations/welcome";
 import { parseAppointmentDate, parseAppointmentTime } from "./appointment-helper";
 import type { MessageTriage } from "./message-triage";
 
@@ -149,8 +149,8 @@ async function composeDraft(
 
   // ── bare greeting → a warm welcome ───────────────────────────────
   if (triage.intent === "greeting") {
-    if (msg.text.trim() === APPT_BUTTON) return { text: APPT_BUTTON_REPLY, grounded: true };
-    if (msg.text.trim() === PRODUCTS_BUTTON) return { text: PRODUCTS_BUTTON_REPLY, grounded: true };
+    if (buttonKey(msg.text) === APPT_BUTTON) return { text: APPT_BUTTON_REPLY, grounded: true };
+    if (buttonKey(msg.text) === PRODUCTS_BUTTON) return { text: PRODUCTS_BUTTON_REPLY, grounded: true };
     return {
       text: withIntro ? WELCOME : "היי 🙂 איך אפשר לעזור? תור, מחיר, שעות, כתובת או בגדים.",
       grounded: true,
@@ -311,16 +311,16 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
   const { message: msg, ownerUserId, workspaceId } = input;
   // Tapping "מוצרים והזמנות" on the welcome buttons isn't a real order question yet —
   // answer with a follow-up prompt, no store alert.
-  const isButton = msg.text.trim() === PRODUCTS_BUTTON || msg.text.trim() === APPT_BUTTON;
+  const isButton = buttonKey(msg.text) === PRODUCTS_BUTTON || buttonKey(msg.text) === APPT_BUTTON;
   let triage: MessageTriage = isButton
     ? { ...input.triage, intent: "greeting", classification: "other", needsReply: false, canAutoReply: true }
     : input.triage;
   // Conversation continues after a welcome button: keep the context of what they picked.
   if (!isButton && (triage.intent === "other" || triage.intent === "greeting")) {
     const prev = await previousInboundText(msg);
-    if (prev === APPT_BUTTON) {
+    if (buttonKey(prev) === APPT_BUTTON) {
       triage = { ...triage, intent: "appointment_availability", classification: "lead", needsReply: true, canAutoReply: true };
-    } else if (prev === PRODUCTS_BUTTON) {
+    } else if (buttonKey(prev) === PRODUCTS_BUTTON) {
       triage = { ...triage, intent: "clothing_availability", classification: "lead", needsReply: true, canAutoReply: false };
     }
   }
