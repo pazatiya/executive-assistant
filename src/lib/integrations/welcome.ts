@@ -9,3 +9,9 @@ export const WELCOME =
 // Meta limits: max 3 buttons, title ≤ 20 chars. The tapped title comes back as the customer's text.
 export const WELCOME_BUTTONS = ["קביעת תור למספרה", "מוצרים והזמנות", "שיחה עם נציג"] as const;
 export const PRODUCTS_BUTTON = WELCOME_BUTTONS[1];
+export const APPT_BUTTON = WELCOME_BUTTONS[0];
+export const APPT_BUTTON_REPLY =
+  "בשמחה! 💈\n\n" +
+  "אשמח לסייע בקביעת תור למספרת DALOR.\n\n" +
+  "*לאיזה יום ושעה תרצו לקבוע תור?*\n\n" +
+  "ניתן לציין תאריך ושעה מועדפים, ואבדוק את הזמינות עבורכם.";

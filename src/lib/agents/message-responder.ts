@@ -11,7 +11,7 @@ import { traceMessage } from "@/lib/services/message-trace";
 import { getAssistantMode } from "@/lib/services/workspaces";
 import { notifyOwnersOf } from "@/lib/services/notifications";
 import { getDayAvailability, findUpcomingAppointmentsByPhone } from "@/lib/integrations/dalor-barber";
-import { WELCOME, PRODUCTS_BUTTON } from "@/lib/integrations/welcome";
+import { WELCOME, PRODUCTS_BUTTON, APPT_BUTTON, APPT_BUTTON_REPLY } from "@/lib/integrations/welcome";
 import { parseAppointmentDate, parseAppointmentTime } from "./appointment-helper";
 import type { MessageTriage } from "./message-triage";
 
@@ -145,6 +145,7 @@ async function composeDraft(
 
   // ── bare greeting → a warm welcome ───────────────────────────────
   if (triage.intent === "greeting") {
+    if (msg.text.trim() === APPT_BUTTON) return { text: APPT_BUTTON_REPLY, grounded: true };
     if (msg.text.trim() === PRODUCTS_BUTTON) {
       return {
         text: "בשמחה 🙂 על איזה מוצר או הזמנה מדובר? כתבו לי מה מעניין אתכם ואבדוק מול החנות.",
@@ -289,7 +290,7 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
   // Tapping "מוצרים והזמנות" on the welcome buttons isn't a real order question yet —
   // answer with a follow-up prompt, no store alert.
   const triage: MessageTriage =
-    msg.text.trim() === PRODUCTS_BUTTON
+    msg.text.trim() === PRODUCTS_BUTTON || msg.text.trim() === APPT_BUTTON
       ? { ...input.triage, intent: "greeting", classification: "other", needsReply: false, canAutoReply: true }
       : input.triage;
   const [withIntro, facts, mode, autoCount, ownerHandling] = await Promise.all([
