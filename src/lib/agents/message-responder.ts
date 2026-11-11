@@ -27,6 +27,10 @@ const AUTO_SEND_INTENTS = new Set([
 
 const HOLDING = "קיבלתי 🙏 בודק ומחזיר לך תשובה עוד מעט.";
 // customer wants a human — we ack and flag it, never keep chatting
+// complaint: never argue or improvise — just acknowledge and say it's being handled
+const COMPLAINT_ACK =
+  "מצטערים לשמוע 🙏\n\n" +
+  "העברנו את פנייתכם לטיפול הצוות, ונחזור אליכם בהקדם האפשרי.";
 const HANDOFF =
   "בשמחה!\n\n" +
   "אני מעביר את פנייתכם לנציג מצוות DALOR, שימשיך את הטיפול בבקשתכם.\n\n" +
@@ -160,6 +164,16 @@ async function composeDraft(
   // ── wants a human → ack + hand off ──────────────────────────────
   if (triage.intent === "wants_human") {
     return { text: prefix + HANDOFF, grounded: true };
+  }
+
+  // ── complaint → short acknowledgement, handled by a human ────────
+  if (triage.intent === "complaint" || triage.classification === "complaint" || triage.sentiment === "negative") {
+    return { text: prefix + COMPLAINT_ACK, grounded: true };
+  }
+
+  // ── price / discount on an item → the catalogue isn't reliable, check with the store
+  if (triage.intent === "price_or_discount") {
+    return { text: prefix + STORE_HOLDING, grounded: true };
   }
 
   // ── clothing / product / order → iron rule, check with the store ─
@@ -388,8 +402,7 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
   // confirmation goes out only after the approval is executed.
   if (approvalId) {
     let why: string | null = null;
-    if (input.viaVoice) why = "הודעה קולית (תמלול אוטומטי) — לא שולחים אוטומטית";
-    else if (ownerHandling) why = "אחד מכם ענה ללקוח לאחרונה — לא נשלח אוטומטית";
+    if (ownerHandling) why = "אחד מכם ענה ללקוח לאחרונה — לא נשלח אוטומטית";
     else if (autoCount >= MAX_CONSECUTIVE_AUTO) why = "הגענו למגבלת תשובות אוטומטיות רצופות ללקוח";
     let ackSent = false;
     if (!why) {
@@ -418,7 +431,6 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
 
   // Why a plain reply is NOT auto-sent (shown to the owners in the inbox).
   const whyNotAutoSent = (): string => {
-    if (input.viaVoice) return "הודעה קולית (תמלול אוטומטי) — לא שולחים אוטומטית";
     if (mode !== "active") return "מצב טיוטות — שום דבר לא נשלח אוטומטית";
     if (ownerHandling) return "אחד מכם ענה ללקוח לאחרונה — לא נשלח אוטומטית";
     if (autoCount >= MAX_CONSECUTIVE_AUTO) return "הגענו למגבלת תשובות אוטומטיות רצופות ללקוח";
@@ -456,7 +468,7 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
         ackFailure = "ההעברה לנציג נכשלה — לא נשלחה הבטחה ללקוח";
       }
     }
-    if (handedOff && mode === "active" && !input.viaVoice && autoCount < MAX_CONSECUTIVE_AUTO && !ownerHandling) {
+    if (handedOff && mode === "active" && autoCount < MAX_CONSECUTIVE_AUTO && !ownerHandling) {
       const r = await executeAction({
         userId: ownerUserId,
         workspaceId,
@@ -502,9 +514,60 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
     return { action: acked ? "auto_replied" : "drafted", detail: draft };
   }
 
+  // Complaints, price/discount questions and anything Jimmy doesn't understand:
+  // the customer must never be left in silence. He gets a short acknowledgement
+  // ("passing this on to be handled") and the owners get an alert; a human answers.
+  const complaintLike = isComplaint || triage.intent === "complaint";
+  const SOFT_ACK =
+    complaintLike ||
+    triage.intent === "price_or_discount" ||
+    (triage.intent === "other" && triage.needsReply !== false && triage.classification !== "praise" && triage.classification !== "spam");
+  if (SOFT_ACK) {
+    const ackText = complaintLike ? COMPLAINT_ACK : triage.intent === "price_or_discount" ? STORE_HOLDING : HOLDING;
+    let acked = false;
+    let ackFailure: string | null = null;
+    if (mode === "active" && autoCount < MAX_CONSECUTIVE_AUTO && !ownerHandling) {
+      const r = await executeAction({
+        userId: ownerUserId,
+        workspaceId,
+        actionType: "reply_message",
+        payload: { messageId: msg.id, to: msg.authorHandle, text: ackText, channel: msg.channel },
+        targetSystem: msg.channel,
+      });
+      acked = r.ok && r.data?.simulated !== true;
+      if (!acked) ackFailure = r.error ?? "השליחה נכשלה";
+    }
+    await trace(acked, ackText, acked ? null : ackFailure ?? whyNotAutoSent());
+    // stays "drafted": a human still has to answer for real
+    await updateMessage(ownerUserId, msg.id, { status: "drafted", draftReply: draft, priority: complaintLike ? "urgent" : "high" });
+    if (acked) {
+      await logActivity({
+        userId: ownerUserId,
+        workspaceId,
+        agent: "social",
+        action: `תשובה אוטומטית ל-${msg.authorHandle}: "${ackText.slice(0, 100)}"`,
+        tool: msg.channel,
+        target: msg.id,
+        riskLevel: "green",
+        approvalStatus: "auto",
+        result: "success",
+        autoExecuted: true,
+        metadata: { intent: triage.intent, ack: true },
+      });
+    }
+    await notifyOwnersOf(workspaceId, {
+      fallbackUserId: ownerUserId,
+      kind: "proactive",
+      title: complaintLike ? `⚠️ תלונה מ-${whoWithPhone}` : `הודעה מ-${whoWithPhone} — ממתינה לך`,
+      body: `"${msg.text.slice(0, 140)}"\n\n${acked ? "ללקוח נשלח: הפנייה בטיפול ונחזור אליו." : `ללקוח לא נשלח כלום (${ackFailure ?? whyNotAutoSent()}).`}`,
+      href: "/messages",
+      priority: complaintLike ? "urgent" : "high",
+    }).catch(() => {});
+    return { action: acked ? "auto_replied" : "drafted", detail: ackText };
+  }
+
   const canAutoSend =
     mode === "active" &&
-    !input.viaVoice &&
     grounded &&
     !isComplaint &&
     AUTO_SEND_INTENTS.has(triage.intent) &&
