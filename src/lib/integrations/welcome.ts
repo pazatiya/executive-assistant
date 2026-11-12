@@ -6,6 +6,16 @@ export const WELCOME =
   "*כיצד אוכל לסייע היום?*\n\n" +
   "אפשר לבחור באחת מהאפשרויות הבאות או פשוט לכתוב לי במה אוכל לעזור.";
 
+/**
+ * Opening message on Facebook Messenger and Instagram — Paz's own wording (12.11.2026).
+ * Plain text: those apps show *bold* / **bold** markers literally, so there are none.
+ */
+export const SOCIAL_WELCOME =
+  "ברוכים הבאים ל־DALOR 🖤\n\n" +
+  "הבית לגבר – אופנת גברים, מספרה מקצועית וסטייל במקום אחד.\n\n" +
+  "תודה שפניתם אלינו! נשמח לסייע בקביעת תורים, מידע על מוצרים, הזמנות ובכל שאלה נוספת.\n\n" +
+  "איך נוכל לעזור לכם היום?";
+
 // Meta limits: max 3 buttons, title ≤ 20 chars. The tapped title comes back as the customer's text.
 export const WELCOME_BUTTONS = ["💈 קביעת תור למספרה", "🛍️ מוצרים והזמנות", "🎧 שיחה עם נציג"] as const;
 

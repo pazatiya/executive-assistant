@@ -13,7 +13,7 @@
  * late reply fails with a clear Meta error that we surface instead of hiding.
  */
 import { env } from "@/lib/env";
-import { WELCOME, WELCOME_BUTTONS } from "./welcome";
+import { SOCIAL_WELCOME, WELCOME_BUTTONS } from "./welcome";
 
 export type SocialChannel = "instagram" | "facebook";
 
@@ -170,9 +170,9 @@ async function postSocial(recipientId: string, message: SocialPayload): Promise<
 }
 
 /**
- * Reply to a person on Messenger / Instagram. Jimmy's opening message goes out
- * exactly like on WhatsApp: the same wording with the same three quick-reply
- * buttons (booking / products / a human); whatever follows it is a second message.
+ * Reply to a person on Messenger / Instagram. The opening message (SOCIAL_WELCOME, Paz's wording)
+ * goes out with the same three quick-reply buttons as on WhatsApp (booking / products /
+ * a human); whatever follows it is a second message.
  * Returns Meta's real error text on failure.
  */
 export async function sendSocialMessage(
@@ -182,10 +182,10 @@ export async function sendSocialMessage(
 ): Promise<{ ok: boolean; id?: string; error?: string }> {
   if (!metaSocialConfigured()) return { ok: false, error: "פייסבוק/אינסטגרם לא מוגדרים (META_PAGE_ID / META_PAGE_TOKEN)" };
 
-  if (text.startsWith(WELCOME)) {
-    const rest = stripWhatsAppMarkup(text.slice(WELCOME.length)).trim();
+  if (text.startsWith(SOCIAL_WELCOME)) {
+    const rest = stripWhatsAppMarkup(text.slice(SOCIAL_WELCOME.length)).trim();
     const r = await postSocial(recipientId, {
-      text: stripWhatsAppMarkup(WELCOME),
+      text: SOCIAL_WELCOME,
       quick_replies: WELCOME_BUTTONS.map((title, i) => ({ content_type: "text" as const, title, payload: `welcome_${i}` })),
     });
     if (r.ok) {

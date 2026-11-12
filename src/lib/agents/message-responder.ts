@@ -11,7 +11,7 @@ import { traceMessage } from "@/lib/services/message-trace";
 import { getAssistantMode } from "@/lib/services/workspaces";
 import { notifyOwnersOf } from "@/lib/services/notifications";
 import { getDayAvailability, findUpcomingAppointmentsByPhone } from "@/lib/integrations/dalor-barber";
-import { WELCOME, PRODUCTS_BUTTON, APPT_BUTTON, APPT_BUTTON_REPLY, PRODUCTS_BUTTON_REPLY, buttonKey } from "@/lib/integrations/welcome";
+import { WELCOME, SOCIAL_WELCOME, PRODUCTS_BUTTON, APPT_BUTTON, APPT_BUTTON_REPLY, PRODUCTS_BUTTON_REPLY, buttonKey } from "@/lib/integrations/welcome";
 import { parseAppointmentDate, parseAppointmentTime } from "./appointment-helper";
 import type { MessageTriage } from "./message-triage";
 
@@ -165,14 +165,16 @@ async function composeDraft(
   /** Why the draft is only a holding reply (shown to the owners as the reason). */
   note?: string;
 }> {
-  const prefix = withIntro ? WELCOME + "\n\n" : "";
+  // Facebook/Instagram have their own opening wording (plain text, team voice); WhatsApp keeps its own.
+  const intro = msg.channel === "whatsapp" ? WELCOME : SOCIAL_WELCOME;
+  const prefix = withIntro ? intro + "\n\n" : "";
 
   // ── bare greeting → a warm welcome ───────────────────────────────
   if (triage.intent === "greeting") {
     if (buttonKey(msg.text) === APPT_BUTTON) return { text: APPT_BUTTON_REPLY, grounded: true };
     if (buttonKey(msg.text) === PRODUCTS_BUTTON) return { text: PRODUCTS_BUTTON_REPLY, grounded: true };
     return {
-      text: withIntro ? WELCOME : "היי 🙂 איך אפשר לעזור? תור, מחיר, שעות, כתובת או בגדים.",
+      text: withIntro ? intro : "היי 🙂 איך אפשר לעזור? תור, מחיר, שעות, כתובת או בגדים.",
       grounded: true,
     };
   }
