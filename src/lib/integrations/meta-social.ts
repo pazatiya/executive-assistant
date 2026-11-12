@@ -13,6 +13,7 @@
  * late reply fails with a clear Meta error that we surface instead of hiding.
  */
 import { env } from "@/lib/env";
+import { WELCOME, WELCOME_BUTTONS } from "./welcome";
 
 export type SocialChannel = "instagram" | "facebook";
 
@@ -128,13 +129,14 @@ export async function fetchSocialProfile(channel: SocialChannel, senderId: strin
   }
 }
 
-/** Reply to a person on Messenger / Instagram. Returns Meta's real error text on failure. */
-export async function sendSocialMessage(
-  _channel: SocialChannel,
-  recipientId: string,
-  text: string,
-): Promise<{ ok: boolean; id?: string; error?: string }> {
-  if (!metaSocialConfigured()) return { ok: false, error: "פייסבוק/אינסטגרם לא מוגדרים (META_PAGE_ID / META_PAGE_TOKEN)" };
+/** Messenger and Instagram don't render WhatsApp-style *bold* — drop the asterisks, keep the words. */
+export function stripWhatsAppMarkup(t: string): string {
+  return t.replace(/\*([^*\n]+)\*/g, "$1");
+}
+
+type SocialPayload = { text: string; quick_replies?: { content_type: "text"; title: string; payload: string }[] };
+
+async function postSocial(recipientId: string, message: SocialPayload): Promise<{ ok: boolean; id?: string; error?: string }> {
   try {
     const res = await fetch(`${graphBase()}/${env.metaPageId}/messages`, {
       method: "POST",
@@ -142,7 +144,7 @@ export async function sendSocialMessage(
       body: JSON.stringify({
         recipient: { id: recipientId },
         messaging_type: "RESPONSE",
-        message: { text: text.slice(0, 1000) }, // Meta's text limit is 2000 bytes; Hebrew is 2 bytes/char
+        message: { ...message, text: message.text.slice(0, 1000) }, // Meta's limit is 2000 bytes; Hebrew is 2 bytes/char
       }),
     });
     const body = (await res.json().catch(() => null)) as
@@ -165,4 +167,32 @@ export async function sendSocialMessage(
     console.error(`[meta-social] send to ${recipientId} threw: ${error}`);
     return { ok: false, error };
   }
+}
+
+/**
+ * Reply to a person on Messenger / Instagram. Jimmy's opening message goes out
+ * exactly like on WhatsApp: the same wording with the same three quick-reply
+ * buttons (booking / products / a human); whatever follows it is a second message.
+ * Returns Meta's real error text on failure.
+ */
+export async function sendSocialMessage(
+  _channel: SocialChannel,
+  recipientId: string,
+  text: string,
+): Promise<{ ok: boolean; id?: string; error?: string }> {
+  if (!metaSocialConfigured()) return { ok: false, error: "פייסבוק/אינסטגרם לא מוגדרים (META_PAGE_ID / META_PAGE_TOKEN)" };
+
+  if (text.startsWith(WELCOME)) {
+    const rest = stripWhatsAppMarkup(text.slice(WELCOME.length)).trim();
+    const r = await postSocial(recipientId, {
+      text: stripWhatsAppMarkup(WELCOME),
+      quick_replies: WELCOME_BUTTONS.map((title, i) => ({ content_type: "text" as const, title, payload: `welcome_${i}` })),
+    });
+    if (r.ok) {
+      if (rest) await postSocial(recipientId, { text: rest });
+      return r;
+    }
+    // buttons rejected → fall back to plain text so the person still gets the welcome
+  }
+  return postSocial(recipientId, { text: stripWhatsAppMarkup(text) });
 }
