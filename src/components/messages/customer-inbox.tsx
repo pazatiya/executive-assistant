@@ -31,6 +31,8 @@ const DELIVERY_META: Record<string, { label: string; cls: string }> = {
   failed: { label: "✗ לא הגיעה", cls: "text-red-400" },
 };
 
+const CHANNEL_LABEL: Record<string, string> = { instagram: "אינסטגרם", facebook: "פייסבוק", whatsapp: "וואטסאפ", tiktok: "טיקטוק", telegram: "טלגרם" };
+
 const CLS: Record<string, string> = {
   lead: "ליד",
   complaint: "תלונה",
@@ -216,10 +218,17 @@ export function CustomerInbox({ messages }: { messages: InboxMessage[] }) {
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-medium">{m.authorName || m.authorHandle}</span>
-                    <span className="text-[11px] text-muted-foreground" dir="ltr">
-                      {m.authorHandle}
-                    </span>
+                    <span className="font-medium">{m.authorName || (m.channel === "whatsapp" ? m.authorHandle : "לקוח")}</span>
+                    {m.channel === "whatsapp" ? (
+                      <span className="text-[11px] text-muted-foreground" dir="ltr">
+                        {m.authorHandle}
+                      </span>
+                    ) : (
+                      // Instagram/Facebook ids are meaningless to a person — show where it came from instead
+                      <span className="rounded bg-secondary px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                        {CHANNEL_LABEL[m.channel] ?? m.channel}
+                      </span>
+                    )}
                     {m.classification !== "other" && (
                       <Badge variant={m.classification === "complaint" ? "red" : m.classification === "lead" ? "primary" : "default"}>
                         {CLS[m.classification] ?? m.classification}

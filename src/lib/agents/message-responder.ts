@@ -403,10 +403,17 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
 
   const { text: draft, grounded, bookingApprovalPayload, cancelApprovalPayload, note } = await composeDraft(triage, msg, facts, withIntro);
 
-  const who = msg.authorName || msg.authorHandle;
+  const who =
+    msg.authorName ||
+    (msg.channel === "instagram" ? "לקוח באינסטגרם" : msg.channel === "facebook" ? "לקוח בפייסבוק" : msg.authorHandle);
   // always carries the phone, even when we also know a name — so a push
   // notification alone is enough to call/text back, no need to open the app.
-  const whoWithPhone = msg.authorName ? `${msg.authorName} (${msg.authorHandle})` : msg.authorHandle;
+  // WhatsApp: name + phone. Instagram/Facebook have no phone — the id is meaningless to a person —
+  // so say who it is and WHICH app it came from.
+  const whoWithPhone =
+    msg.channel === "instagram" || msg.channel === "facebook"
+      ? `${msg.authorName || "לקוח"} ב${msg.channel === "instagram" ? "אינסטגרם" : "פייסבוק"}`
+      : msg.authorName ? `${msg.authorName} (${msg.authorHandle})` : msg.authorHandle;
   const isComplaint = triage.classification === "complaint" || triage.sentiment === "negative";
 
   // booking with a confirmed free slot → real action → approval (app)

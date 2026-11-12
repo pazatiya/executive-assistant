@@ -101,19 +101,28 @@ export function parseSocialWebhook(raw: unknown, cfg = { pageId: env.metaPageId,
   return out;
 }
 
-/** Best-effort display name for a sender (Meta only returns it with the right permission). */
+/**
+ * Best-effort display name for a sender. A direct GET /{sender-id}?fields=name is
+ * refused for our token (it needs a profile-access feature Meta gates behind app
+ * review), but the Page's conversation with that person lists its participants with
+ * their name (Messenger) / username (Instagram) — which works today.
+ */
 export async function fetchSocialProfile(channel: SocialChannel, senderId: string): Promise<string | null> {
   if (!metaSocialConfigured()) return null;
   try {
-    const fields = channel === "instagram" ? "name,username" : "name";
-    const res = await fetch(`${graphBase()}/${senderId}?fields=${fields}`, {
+    const q = new URLSearchParams({ user_id: senderId, fields: "participants" });
+    if (channel === "instagram") q.set("platform", "instagram");
+    const res = await fetch(`${graphBase()}/${env.metaPageId}/conversations?${q}`, {
       headers: { Authorization: `Bearer ${env.metaPageToken}` },
     });
     if (!res.ok) return null;
-    const j = (await res.json().catch(() => null)) as { name?: string; username?: string } | null;
-    const name = j?.name?.trim();
-    if (name) return channel === "instagram" && j?.username ? `${name} (@${j.username})` : name;
-    return j?.username ? `@${j.username}` : null;
+    const j = (await res.json().catch(() => null)) as {
+      data?: { participants?: { data?: { id?: string; name?: string; username?: string }[] } }[];
+    } | null;
+    const p = j?.data?.[0]?.participants?.data?.find((x) => x.id === senderId);
+    if (!p) return null;
+    if (channel === "instagram") return p.username ? `@${p.username}` : null;
+    return p.name?.trim() || null;
   } catch {
     return null;
   }
