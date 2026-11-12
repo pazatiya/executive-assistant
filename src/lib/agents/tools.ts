@@ -227,22 +227,27 @@ const draft_message_reply: ToolFn = async (ctx, input) => {
   const text = String(input.text ?? "");
   const mRow = messageId ? await db.query.messages.findFirst({ where: eq(messages.id, messageId) }) : null;
   const m = mRow && (await canAccessRow(ctx.userId, mRow)) ? mRow : null;
-  await db.update(messages).set({ draftReply: text, status: "waiting_approval" }).where(eq(messages.id, messageId));
+  // Never queue an approval card with nothing in it: an unknown/inaccessible message or an empty
+  // draft used to produce a blank "reply on a social network" card (and updated the message row
+  // before the access check). Tell the model so it can find the message or write the text.
+  if (!m) return { ok: false, summary: "לא מצאתי את ההודעה לענות עליה — בדוק messageId מ-get_context kind=messages ואל תיצור טיוטה בלעדיו" };
+  if (!text.trim()) return { ok: false, summary: "הטיוטה ריקה — כתוב את תוכן התגובה לפני שמעלים לאישור" };
+  await db.update(messages).set({ draftReply: text, status: "waiting_approval" }).where(eq(messages.id, m.id));
   const cls = await classifyAction({
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
     actionType: "reply_message",
-    targetSystem: m?.channel ?? "instagram",
-    negativeSentiment: m?.sentiment === "negative" || m?.classification === "complaint",
+    targetSystem: m.channel,
+    negativeSentiment: m.sentiment === "negative" || m.classification === "complaint",
   });
   const a = await createApproval({
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
-    title: `תגובה ב-${m?.channel ?? "רשת חברתית"}: ${m?.authorName || m?.authorHandle || messageId}`,
-    context: m ? `${m.authorHandle} (${m.classification}): ${m.text}` : "",
+    title: `תגובה ב-${m.channel}: ${m.authorName || m.authorHandle}`,
+    context: `${m.authorHandle} (${m.classification}): ${m.text}`,
     actionType: "reply_message",
-    actionPayload: { messageId, text },
-    targetSystem: m?.channel ?? "instagram",
+    actionPayload: { messageId: m.id, text },
+    targetSystem: m.channel,
     riskLevel: cls.riskLevel,
     reason: cls.reason,
     preview: text,
