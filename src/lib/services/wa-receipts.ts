@@ -11,13 +11,17 @@ export async function recordReceipt(ev: MetaStatusEvent) {
   const existing = await db.query.waReceipts.findFirst({ where: eq(waReceipts.wamid, ev.wamid) });
   const at = ev.at ?? new Date().toISOString();
   if (!existing) {
-    await db.insert(waReceipts).values({
-      wamid: ev.wamid,
-      toNumber: ev.to.replace(/\D/g, ""),
-      status: ev.status,
-      errorSummary: ev.errorSummary ?? null,
-      statusAt: at,
-    });
+    // two status events for the same message can arrive at the same instant — the loser is harmless
+    await db
+      .insert(waReceipts)
+      .values({
+        wamid: ev.wamid,
+        toNumber: ev.to.replace(/\D/g, ""),
+        status: ev.status,
+        errorSummary: ev.errorSummary ?? null,
+        statusAt: at,
+      })
+      .onConflictDoNothing();
     return;
   }
   if (RANK[ev.status] <= RANK[existing.status]) return;
