@@ -88,6 +88,13 @@ export async function executeAction(input: ExecuteInput): Promise<ExecuteResult>
           const r = await sendWhatsAppWindowAware(to, text, msg?.authorName);
           if (!r.ok) return { ok: false, actionType, detail: "", error: r.error ?? "WhatsApp send failed" };
           sent = { simulated: false, providerId: r.providerId };
+        } else if ((channel === "instagram" || channel === "facebook") && to) {
+          const { sendSocialMessage, metaSocialConfigured } = await import("@/lib/integrations/meta-social");
+          if (metaSocialConfigured()) {
+            const r = await sendSocialMessage(channel, to, text);
+            if (!r.ok) return { ok: false, actionType, detail: "", error: r.error ?? "השליחה נכשלה" };
+            sent = { simulated: false, providerId: r.id };
+          }
         }
 
         if (messageId) {
@@ -101,7 +108,9 @@ export async function executeAction(input: ExecuteInput): Promise<ExecuteResult>
           actionType,
           detail: sent.simulated
             ? "התגובה נשמרה ותישלח כשהערוץ יחובר (סימולציה)."
-            : "הבקשה נשלחה לוואטסאפ — אישור מסירה יופיע בדף ההודעות.",
+            : channel === "instagram" || channel === "facebook"
+              ? `התגובה נשלחה ב${channel === "instagram" ? "אינסטגרם" : "פייסבוק"}.`
+              : "הבקשה נשלחה לוואטסאפ — אישור מסירה יופיע בדף ההודעות.",
           data: { ...sent },
         };
       }

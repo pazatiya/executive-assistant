@@ -85,6 +85,13 @@ services:
         sync: false # any string you choose; echoed in the webhook GET challenge
       - key: META_APP_SECRET
         sync: false # Meta app → Settings → Basic → App Secret
+      # Facebook Messenger + Instagram DMs (same Meta app / webhook as WhatsApp)
+      - key: META_PAGE_ID
+        sync: false
+      - key: META_PAGE_TOKEN
+        sync: false
+      - key: META_IG_ID
+        sync: false
       # WAHA was retired (Meta Cloud API is free + no ban risk). To bring the
       # self-hosted bridge back: re-add a `dalor-waha` image service and set
       # WAHA_BASE_URL / WAHA_API_KEY / WAHA_WEBHOOK_SECRET here.

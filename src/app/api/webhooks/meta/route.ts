@@ -1,6 +1,7 @@
 import { env } from "@/lib/env";
 import { metaVerifyChallenge, parseMetaInboundAll, parseMetaStatuses, verifyMetaSignature } from "@/lib/integrations/meta-whatsapp";
-import { ingestWhatsAppMessage } from "@/lib/agents/inbound-pipeline";
+import { parseSocialWebhook } from "@/lib/integrations/meta-social";
+import { ingestWhatsAppMessage, ingestSocialMessage } from "@/lib/agents/inbound-pipeline";
 import { resolveWhatsAppTarget } from "@/lib/integrations/whatsapp-context";
 import { notifyOwnersOf } from "@/lib/services/notifications";
 import { recordReceipt } from "@/lib/services/wa-receipts";
@@ -42,6 +43,18 @@ export async function POST(req: Request) {
     body = JSON.parse(raw);
   } catch {
     return new Response("bad json", { status: 400 });
+  }
+
+  // Facebook Messenger / Instagram DMs share this webhook URL: `object` is "page" or "instagram"
+  // (WhatsApp's is "whatsapp_business_account"). Handled in the background like WhatsApp below.
+  const objectType = (body as { object?: string } | null)?.object;
+  if (objectType === "page" || objectType === "instagram") {
+    const social = parseSocialWebhook(body);
+    if (!social.length) return Response.json({ ok: true, handled: "ignored" });
+    void (async () => {
+      for (const m of social) await ingestSocialMessage(m).catch((e) => console.error("social ingest failed", e));
+    })();
+    return Response.json({ ok: true, handled: "accepted", count: social.length });
   }
 
   // delivery/read receipts (and send failures) for messages we sent — logged

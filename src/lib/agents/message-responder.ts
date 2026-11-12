@@ -217,6 +217,14 @@ async function composeDraft(
       return { text: prefix + `${heDate(date)} אין תורים פנויים${why}. רוצה שאבדוק יום אחר?`, grounded: true };
     }
     const slotList = day.freeSlots.slice(0, 8).join(" · ");
+    if (time && day.freeSlots.includes(time) && msg.channel !== "whatsapp") {
+      // Instagram/Facebook give us no phone number, and the booking system identifies (and
+      // reminds) a customer by phone — so never book from here. Say it's free and ask for the details.
+      return {
+        text: prefix + `${time} פנוי ל${heDate(date)} ✅ כדי לסגור את התור אני צריך שם מלא ומספר טלפון — כתוב לי אותם ואעביר לאישור של יאיר.`,
+        grounded: true,
+      };
+    }
     if (time && day.freeSlots.includes(time)) {
       return {
         text: prefix + `${time} פנוי ל${heDate(date)} ✅ מעביר לאישור של יאיר וחוזר אלייך לעדכן.`,
@@ -247,6 +255,10 @@ async function composeDraft(
   }
 
   // ── cancel an existing appointment: find it by phone → approval ───
+  if (triage.intent === "appointment_change" && /לבטל|תבטל|ביטול|cancel/i.test(msg.text) && msg.channel !== "whatsapp") {
+    // appointments are looked up by phone number, which Instagram/Facebook don't give us
+    return { text: prefix + "כדי לבטל תור אני צריך לזהות אותך לפי מספר הטלפון שבו קבעת — כתוב לי אותו ואעביר לטיפול של יאיר.", grounded: true };
+  }
   if (triage.intent === "appointment_change" && /לבטל|תבטל|ביטול|cancel/i.test(msg.text)) {
     let upcoming;
     try {
@@ -457,7 +469,7 @@ export async function respondToMessage(input: RespondInput): Promise<RespondResu
         targetSystem: msg.channel,
       });
       if (r.ok && r.data?.simulated !== true) ackSent = true;
-      else why = r.error ?? (r.data?.simulated ? "WhatsApp לא מחובר (מצב הדמיה)" : "השליחה נכשלה");
+      else why = r.error ?? (r.data?.simulated ? "הערוץ לא מחובר (מצב הדמיה)" : "השליחה נכשלה");
     }
     await trace(ackSent, draft, why);
     await updateMessage(ownerUserId, msg.id, { status: "drafted", draftReply: ackSent ? null : draft, priority: "high" });

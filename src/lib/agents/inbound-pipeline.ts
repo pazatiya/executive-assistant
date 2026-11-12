@@ -16,6 +16,7 @@ import { respondToMessage } from "@/lib/agents/message-responder";
 import { runAutomations } from "@/lib/automation/engine";
 import { notifyOwnersOf } from "@/lib/services/notifications";
 import { transcribeVoiceMessage } from "@/lib/integrations/transcribe";
+import { fetchSocialProfile, type SocialInbound } from "@/lib/integrations/meta-social";
 
 export type IngestResult =
   | { ok: true; handled: "ignored" | "skipped" | "duplicate" | "owner_command" }
@@ -149,4 +150,81 @@ export async function ingestWhatsAppMessage(msg: InboundMessage | null): Promise
     intent: triage.intent,
     outcome: responded?.action ?? "silent",
   };
+}
+
+/**
+ * Facebook Messenger / Instagram DM from a customer. Same path as a WhatsApp
+ * customer message — triage, then auto-reply for the safe intents or a draft
+ * for the owners — minus the WhatsApp-only parts (owner commands by phone
+ * number, voice notes, photo proxy). The sender id is the only handle we get
+ * (no phone), which is also what we reply to.
+ */
+export async function ingestSocialMessage(msg: SocialInbound | null): Promise<IngestResult> {
+  if (!msg || !msg.text) return { ok: true, handled: "skipped" };
+  console.log(`[inbound:${msg.channel}] from=${msg.senderId} text="${msg.text.slice(0, 120)}"`);
+  if (alreadySeen(`${msg.channel}:${msg.externalId}`)) return { ok: true, handled: "duplicate" };
+
+  const target = await resolveWhatsAppTarget(); // same owner + DALOR workspace as WhatsApp
+  if (!target) return { ok: false, handled: "no_target" };
+
+  const dup = await findMessageByExternalId(msg.channel, msg.externalId);
+  if (dup) return { ok: true, handled: "duplicate" };
+
+  const authorName = await fetchSocialProfile(msg.channel, msg.senderId);
+  const created = await createInboundMessage({
+    userId: target.userId,
+    workspaceId: target.workspaceId,
+    integrationId: null,
+    channel: msg.channel,
+    kind: "dm",
+    externalId: msg.externalId,
+    authorHandle: msg.senderId,
+    authorName,
+    text: msg.text,
+    receivedAt: msg.receivedAt,
+    source: "live",
+  });
+
+  const triage = await triageMessage({ text: msg.text, authorName, channel: msg.channel });
+  const classified =
+    (await updateMessage(target.userId, created.id, {
+      classification: triage.classification,
+      sentiment: triage.sentiment,
+      priority: triage.priority,
+    })) ?? created;
+
+  let responded: Awaited<ReturnType<typeof respondToMessage>> | null = null;
+  try {
+    responded = await respondToMessage({
+      message: classified,
+      triage,
+      ownerUserId: target.userId,
+      workspaceId: target.workspaceId,
+      viaVoice: false,
+    });
+  } catch (e) {
+    console.error("respondToMessage failed", e);
+    await notifyOwnersOf(target.workspaceId, {
+      fallbackUserId: target.userId,
+      kind: "proactive",
+      title: `הודעה מ-${authorName ?? msg.senderId} ב${msg.channel === "instagram" ? "אינסטגרם" : "פייסבוק"} — לא הצלחתי לענות`,
+      body: `"${msg.text.slice(0, 140)}"\n\nהמערכת נתקלה בתקלה ולא ענתה. היכנסו ל-הודעות וענו.`,
+      href: "/messages",
+      priority: "high",
+    }).catch(() => {});
+  }
+  console.log(`[inbound:${msg.channel}] intent=${triage.intent} outcome=${responded?.action ?? "silent"} messageId=${created.id}`);
+
+  await runAutomations(target.userId, "message.received", {
+    workspaceId: target.workspaceId,
+    messageId: created.id,
+    channel: msg.channel,
+    classification: triage.classification,
+    sentiment: triage.sentiment,
+    text: msg.text,
+    from: msg.senderId,
+    targetSystem: msg.channel,
+  }).catch(() => []);
+
+  return { ok: true, handled: "message", id: created.id, intent: triage.intent, outcome: responded?.action ?? "silent" };
 }

@@ -50,6 +50,11 @@ export const env = {
   metaWaVerifyToken: get("META_WA_VERIFY_TOKEN"), // our own string, echoed in the GET challenge
   metaAppSecret: get("META_APP_SECRET"), // for X-Hub-Signature-256 verification
   metaGraphVersion: get("META_GRAPH_VERSION", "v21.0"),
+  // Facebook Messenger + Instagram DMs — same Meta app/webhook. Page access token
+  // (from the system user) + the Page id; metaIgId = the linked Instagram professional account.
+  metaPageId: get("META_PAGE_ID"),
+  metaPageToken: get("META_PAGE_TOKEN"),
+  metaIgId: get("META_IG_ID"),
   // template used to open a conversation with a customer who wrote to a private line
   metaOutreachTemplate: get("META_WA_OUTREACH_TEMPLATE", "customer_outreach"),
   // template for the pre-appointment reminder — business-initiated, almost always
